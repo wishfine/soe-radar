@@ -2,7 +2,7 @@
 const $ = selector => document.querySelector(selector);
 const token = $('meta[name="radar-token"]').content;
 const state = {view:'radar', days:'', changed:false, fresh:false, old:false, page:1, total:0, pageSize:30, detail:null, pendingRun:null};
-const labels = {radar:'机会雷达',saved:'我的关注',pending:'待核验',history:'历年归档',sources:'信源与运行',imports:'导入线索'};
+const labels = {radar:'机会雷达',saved:'我的关注',pending:'待核验',history:'历年归档',coverage:'全国覆盖',sources:'信源与运行',imports:'导入线索'};
 const kinds = {date:'日期明确',datetime:'时刻明确',rolling:'招满即止',long_term:'长期招聘',unannounced:'截止未公布',conflict:'日期冲突'};
 const statuses = {success:'本轮完成',partial:'待续跑',no_recruitment:'未发现校招内容',error:'采集异常',unverified:'尚未验证',queued:'等待同步',running:'同步中',failed:'同步失败'};
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -76,7 +76,7 @@ async function refreshSummary(){
   cohort.innerHTML='<option value="">全部届别</option>'+stats.cohorts.map(y=>`<option value="${esc(y)}">${esc(y)} 届</option>`).join('');cohort.value=current;
   const industry=$('[name="industry"]'),previous=industry.value;
   industry.innerHTML='<option value="">全部行业</option>'+stats.industries.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');industry.value=previous;
-  $('#sources-list').innerHTML=health.sources.map(source=>`<article class="source-card"><div class="source-top"><h3>${esc(source.name)}</h3><span class="tag ${source.status==='error'?'red':source.status==='partial'?'amber':'gray'}">${esc(statuses[source.status]||source.status)}</span></div><p>最近读取：${when(source.last_success)} · 已保存 ${source.campus_count} 条校招（含历届） / ${source.verified_count} 条核验通过</p>${source.last_error?`<p class="error-text">${esc(readableError(source.last_error))}</p>`:''}${source.cursor?.backlog?.length?`<p>待续跑 ${source.cursor.backlog.length} 条详情</p>`:''}<a href="${safeURL(source.url)}" target="_blank" rel="noopener noreferrer">官方入口 ↗</a> <button class="button compact ghost" data-sync-source="${esc(source.id)}">重试此来源</button></article>`).join('');
+  $('#sources-list').innerHTML=health.sources.map(source=>`<article class="source-card"><div class="source-top"><h3>${esc(source.name)}</h3><span class="tag ${source.status==='error'?'red':source.status==='partial'?'amber':'gray'}">${esc(statuses[source.status]||source.status)}</span></div><p>网络策略：${esc(source.network_mode)} · 最近读取：${when(source.last_success)} · 已保存 ${source.campus_count} 条校招（含历届） / ${source.verified_count} 条核验通过</p>${source.last_error?`<p class="error-text">${esc(readableError(source.last_error))}</p>`:''}${source.cursor?.backlog?.length?`<p>待续跑 ${source.cursor.backlog.length} 条详情</p>`:''}${source.network_attempts?.length?`<details><summary>最近网络尝试</summary>${source.network_attempts.slice(-6).map(a=>`<p>${esc(a.route)} · ${esc(a.host)} · ${esc(a.status_code||a.error)} · ${a.duration_ms}ms</p>`).join('')}</details>`:''}<a href="${safeURL(source.url)}" target="_blank" rel="noopener noreferrer">官方入口 ↗</a> <button class="button compact ghost" data-sync-source="${esc(source.id)}">重试此来源</button></article>`).join('');
   $('#providers-list').innerHTML=health.providers.map(p=>`<div class="provider-item"><span>${esc(p.name)} <span class="tag ${p.enabled&&!p.configured?'amber':'gray'}">${!p.enabled?'未启用':p.pause?'暂停中':!p.configured?'缺少凭证':p.allowed_models.length?'已配置':'费用策略阻止'}</span></span><code>${esc(p.models.join(' / '))}</code></div>`).join('');
   $('#model-note').textContent=`${health.allow_paid?'已允许付费':'默认禁止额外付费'} · ${health.pending_documents} 份待核验文档 · 共 ${health.model_calls} 次模型请求 · 付费预算预留 $${Number(health.reserved_cost_usd).toFixed(4)}。模型不可用时，采集与规则解析仍可继续。`;
 }
@@ -84,14 +84,15 @@ async function showView(view){
   state.view=view;state.page=1;state.days='';state.changed=false;state.fresh=false;
   document.querySelectorAll('.nav-item').forEach(item=>item.classList.toggle('active',item.dataset.view===view));
   document.querySelectorAll('[data-days]').forEach(item=>item.classList.toggle('selected',item.dataset.days===''));
-  $('#changed-filter').classList.remove('selected');$('#new-filter').classList.remove('selected');$('#old-filter').hidden=view!=='pending';document.querySelector('.hero').hidden=['sources','imports'].includes(view);document.querySelector('.stats').hidden=['sources','imports'].includes(view);document.querySelectorAll('[data-days]').forEach(x=>x.hidden=view==='history');
+  $('#changed-filter').classList.remove('selected');$('#new-filter').classList.remove('selected');$('#old-filter').hidden=view!=='pending';document.querySelector('.hero').hidden=['sources','imports','coverage'].includes(view);document.querySelector('.stats').hidden=['sources','imports','coverage'].includes(view);document.querySelectorAll('[data-days]').forEach(x=>x.hidden=view==='history');
   $('#breadcrumb').textContent=labels[view];
   $('#page-heading').innerHTML=view==='radar'?'下一次机会，<em>提前看见。</em>':esc(labels[view])+'<em>，有迹可循。</em>';
   $('#list-title').textContent={radar:'投递窗口',saved:'我的关注',pending:'待核验线索',history:'历年招聘记录'}[view]||'投递窗口';
-  $('#list-panel').hidden=['sources','imports'].includes(view);$('#sources-panel').hidden=view!=='sources';$('#imports-panel').hidden=view!=='imports';
-  if(!['sources','imports'].includes(view)) await renderList();
+  $('#list-panel').hidden=['sources','imports','coverage'].includes(view);$('#sources-panel').hidden=view!=='sources';$('#imports-panel').hidden=view!=='imports';$('#coverage-panel').hidden=view!=='coverage';
+  if(!['sources','imports','coverage'].includes(view)) await renderList();
   await refreshSummary();
   if(view==='sources') await renderRuns();
+  if(view==='coverage') await renderCoverage();
 }
 async function renderRuns(){
   const runs=await api('/api/runs');
@@ -110,7 +111,7 @@ async function pollRun(){
       state.pendingRun=null;$('#sync-button').disabled=false;
       const failed=(run.summary.sources||[]).filter(s=>['error','failed'].includes(s.status)).length;const partial=(run.summary.sources||[]).filter(s=>s.status==='partial').length;
       const empty=(run.summary.sources||[]).filter(s=>s.status==='no_recruitment').length;$('#run-banner').textContent=run.status==='failed'?'同步失败，详情见信源与运行。':`本轮结束：${failed} 个失败 · ${partial} 个待续跑 · ${empty} 个未发现校招内容。待核验记录不进入临期日历。`;
-      await refreshSummary();if(!['sources','imports'].includes(state.view)) await renderList();if(state.view==='sources') await renderRuns();return;
+      await refreshSummary();if(!['sources','imports','coverage'].includes(state.view)) await renderList();if(state.view==='sources') await renderRuns();return;
     }
     $('#run-banner').textContent=run.status==='running'?'正在巡查官方来源、保存原文并校验日期。你可以继续浏览已有数据。':'同步任务等待执行，请保持本地服务运行。';
   }catch(error){toast(error.message,true);}
@@ -153,7 +154,7 @@ document.addEventListener('click',async event=>{
       const id=target.dataset.save||target.dataset.apply;const key=target.dataset.save?'saved':'applied';
       await api('/api/opportunities/'+id+'/state',{method:'PATCH',body:JSON.stringify({[key]:target.dataset.value==='true'})});
       if($('#detail-dialog').open&&state.detail?.id===id)await openDetail(id);
-      if(!['sources','imports'].includes(state.view))await renderList();await refreshSummary();
+      if(!['sources','imports','coverage'].includes(state.view))await renderList();await refreshSummary();
     }
     if(target.hasAttribute('data-days')){state.days=target.dataset.days;state.page=1;document.querySelectorAll('[data-days]').forEach(x=>x.classList.toggle('selected',x===target));await renderList();}
   }catch(error){toast(error.message,true);}
@@ -189,3 +190,27 @@ $('#detail-dialog').addEventListener('submit',async event=>{
 $('#import-form').addEventListener('submit',async event=>{event.preventDefault();const button=event.submitter;button.disabled=true;try{const result=await api('/api/imports',{method:'POST',body:new FormData(event.target)});$('#import-result').hidden=false;$('#import-result').textContent=`已导入 ${result.imported} 条线索，进入待核验区。`+(result.errors.length?'\n'+result.errors.map(e=>`第 ${e.row} 行：${e.error}`).join('\n'):'');await refreshSummary();toast('导入完成');}catch(e){toast(e.message,true);}finally{button.disabled=false;}});
 $('#clock').textContent=new Date().toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'})+' · Asia/Shanghai';
 Promise.all([renderList(),refreshSummary()]).then(async()=>{const runs=await api('/api/runs');const running=runs.find(r=>['running','queued'].includes(r.status));if(running){state.pendingRun=running.id;$('#sync-button').disabled=true;$('#run-banner').hidden=false;pollRun();}}).catch(e=>toast(e.message,true));
+
+let coveragePage=1;
+const coverageLabels={missing_entry:'入口待接入',blocked:'访问受阻',not_checked:'尚未检查',stale:'需要复查',not_found:'暂未发现当届校招',campus_found:'已发现当届校招'};
+async function renderCoverage(){
+  const form=$('#coverage-filters');const query=new URLSearchParams(new FormData(form));
+  for(const [key,value] of [...query])if(!value)query.delete(key);
+  query.set('page',coveragePage);query.set('page_size',50);
+  const report=await api('/api/coverage?'+query),summary=report.summary;
+  if(!form.elements.cohort.value)form.elements.cohort.value=report.cohort;
+  const registry=form.elements.registry,selected=registry.value;
+  registry.innerHTML='<option value="">全部名录 / 已知企业</option>'+report.registries.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');registry.value=selected;const importSelect=$('#registry-import-form select');const importSelected=importSelect.value;importSelect.innerHTML=report.registries.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');if(importSelected)importSelect.value=importSelected;
+  $('#coverage-summary').innerHTML=[['全国企业总数','未知'],['已知主体（含待核）',summary.known_entities],['有独立监测入口',summary.with_entry],[`${report.fresh_hours} 小时内检查成功`,summary.recently_checked],[`${report.cohort} 届有校招的主体`,summary.with_campus],['底册尚未取得',`${summary.registry_gaps} 项`]].map(([label,value])=>`<div class="stat"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join('');
+  $('#coverage-total').textContent=`匹配 ${report.total} 家企业。${report.note}`;
+  $('#coverage-rows').innerHTML=report.items.map(r=>`<tr><td><strong>${esc(r.name)}</strong>${r.parent_id?'<div class="muted">已关联上级集团；覆盖单独核算</div>':''}${r.proof_url?`<div><a href="${safeURL(r.proof_url)}" target="_blank" rel="noopener noreferrer">企业依据 ↗</a></div>`:'<div class="muted">企业性质待核验</div>'}</td><td>${esc(r.regions.join(' / ')||'地区待建档')}<div class="muted">${esc(r.registry_ids.join(' / ')||'尚未关联已取得的底册')}</div></td><td><span class="tag ${r.status==='blocked'?'red':r.status==='campus_found'?'':'amber'}">${esc(coverageLabels[r.status])}</span>${r.sources.filter(x=>x.error).map(x=>`<p class="error-text">${esc(readableError(x.error))}</p>`).join('')}</td><td>${r.sources.length?r.sources.map(x=>`<p><a href="${safeURL(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.name)} ↗</a><br><small>${when(x.last_success)}</small></p>`).join(''):'待寻找官方招聘入口'}${r.discovered_by.length?`<small>线索发现渠道：${esc(r.discovered_by.join(' / '))}</small>`:''}</td><td>${r.campus_count} 条校招<div class="muted">${r.verified_count} 条已核验 · ${r.pending_count} 条待补证</div>${r.unknown_cohort_count?`<small>另有 ${r.unknown_cohort_count} 条届别待确认</small>`:''}</td></tr>`).join('')||'<tr><td colspan="5">没有匹配企业。名录未读到时分母保持未知，不代表该地区没有国企。</td></tr>';
+  $('#coverage-page').textContent=`${coveragePage} / ${Math.max(1,Math.ceil(report.total/50))}`;$('#coverage-prev').disabled=coveragePage<=1;$('#coverage-next').disabled=coveragePage*50>=report.total;
+  $('#coverage-export').href='/exports/coverage.csv?cohort='+report.cohort;
+  $('#registry-list').innerHTML=report.registries.map(r=>`<article class="source-card"><div class="source-top"><h3>${esc(r.name)}</h3><span class="tag ${r.status==='error'?'red':'gray'}">${r.status==='missing_entry'?'入口待核对':r.status==='error'?'刷新受阻':r.status==='success'?'已取得底册':r.status==='imported'?'已导入（人工来源确认）':'尚未读取'}</span></div><p>${esc(r.region)} · ${r.count===null?'企业数未知':`当前版本 ${r.count} 家`} · ${r.versions} 个版本</p><p>最近成功：${when(r.last_success)}</p>${r.last_error?`<p class="error-text">${esc(readableError(r.last_error))}</p>`:''}${r.url?`<a href="${safeURL(r.url)}" target="_blank" rel="noopener noreferrer">官方名录 ↗</a> ${r.refreshable?`<button class="button compact ghost" data-refresh-registry="${esc(r.id)}">刷新底册</button>`:''}`:'<p class="muted">待核实名录与所属单位，不计入已覆盖。</p>'}</article>`).join('');
+}
+$('#coverage-filters').addEventListener('submit',event=>{event.preventDefault();coveragePage=1;renderCoverage().catch(e=>toast(e.message,true));});
+$('#coverage-prev').addEventListener('click',()=>{coveragePage--;renderCoverage().catch(e=>toast(e.message,true));});
+$('#coverage-next').addEventListener('click',()=>{coveragePage++;renderCoverage().catch(e=>toast(e.message,true));});
+$('#registry-list').addEventListener('click',async event=>{const button=event.target.closest('[data-refresh-registry]');if(!button)return;button.disabled=true;button.textContent='正在读取…';try{const result=await api('/api/registries/'+button.dataset.refreshRegistry+'/refresh',{method:'POST'});const row=result.registries[0];toast(row.status==='success'?`底册已保存：${row.count} 家`:'未取得新底册，已保留已有数据',row.status==='error');await renderCoverage();}catch(error){toast(error.message,true);button.disabled=false;button.textContent='刷新底册';}});
+
+$('#registry-import-form').addEventListener('submit',async event=>{event.preventDefault();const button=event.submitter;button.disabled=true;try{const form=new FormData(event.target);const result=await api('/api/registries/'+encodeURIComponent(form.get('registry_id'))+'/imports',{method:'POST',body:form});toast(`已保存 ${result.count} 家企业，招聘入口将单独核对`);await renderCoverage();}catch(error){toast(error.message,true);}finally{button.disabled=false;}});

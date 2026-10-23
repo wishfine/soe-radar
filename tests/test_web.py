@@ -44,6 +44,47 @@ def test_home_and_empty_install_work_without_model_credentials(client):
     assert client.get("/api/health").json()["allow_paid"] is False
 
 
+def test_coverage_gaps_are_visible_and_national_denominator_is_unknown(client):
+    result = client.get("/api/coverage?status=missing_entry").json()
+    assert result["national_total"] is None
+    assert result["national_coverage_rate"] is None
+    assert len(result["registries"]) >= 35
+    assert len([r for r in result["registries"] if r["category"] == "local"]) == 31
+    assert all(r["count"] is None for r in result["registries"])
+    assert all(r["status"] == "missing_entry" for r in result["items"])
+    assert client.post("/api/registries/central-sasac/refresh").status_code == 403
+    assert client.get("/exports/coverage.csv").status_code == 200
+    assert "企业名称" in client.get("/exports/coverage.csv").text
+
+
+def test_coverage_pagination_and_cohort_count_exclude_past_announcements(client):
+    add_record(client, year=2035)
+    current = client.get("/api/coverage?cohort=2035&page_size=1").json()
+    old = client.get("/api/coverage?cohort=2036").json()
+    assert current["summary"]["with_campus"] == 1
+    assert old["summary"]["with_campus"] == 0
+    assert len(current["items"]) == 1
+
+
+def test_registry_csv_import_requires_local_auth_and_explicit_provenance(client):
+    url = "/api/registries/local-01/imports"
+    files = {"file": ("registry.csv", "企业名称\n合成示例企业有限公司\n".encode(), "text/csv")}
+    data = {"proof_url": "https://example.gov.cn/enterprises"}
+    assert client.post(url, files=files, data=data).status_code == 403
+    assert client.post(url, files=files, data=data, headers=auth(client)).status_code == 422
+    data["confirmed"] = "on"
+    response = client.post(url, files=files, data=data, headers=auth(client))
+    assert response.status_code == 200
+    result = client.get("/api/coverage?registry=local-01").json()
+    assert result["total"] == 1
+    assert result["items"][0]["status"] == "missing_entry"
+    assert result["national_total"] is None
+    registry = next(r for r in result["registries"] if r["id"] == "local-01")
+    assert registry["status"] == "imported"
+    assert registry["url"] == data["proof_url"]
+    assert not registry["refreshable"]
+
+
 def test_filters_and_personal_state_persist(client):
     record = add_record(client)
     assert client.get("/api/opportunities?cohort=2035&region=北京").json()["total"] == 1

@@ -17,6 +17,7 @@
     <button class="nav-item" data-view="pending"><span>◷</span> 待核验 <b class="nav-count" id="nav-pending">—</b></button>
     <button class="nav-item" data-view="history"><span>▤</span> 历年归档</button>
     <div class="nav-divider"></div>
+    <button class="nav-item" data-view="coverage"><span>◎</span> 全国覆盖</button>
     <button class="nav-item" data-view="sources"><span>⌘</span> 信源与运行</button>
     <button class="nav-item" data-view="imports"><span>↥</span> 导入线索</button>
   </nav>
@@ -44,6 +45,17 @@
     <div class="empty-state" id="empty-state" hidden><div class="empty-symbol">⌁</div><h3 id="empty-title">雷达已准备就绪</h3><p id="empty-message">点击「同步来源」收集官方招聘公告。没有模型凭证也能使用规则解析。</p><button class="button dark" id="empty-action">同步来源 ↗</button></div>
     <footer class="list-footer"><span id="updated-note">正在读取本地数据…</span><div class="pagination"><button id="previous" class="button compact ghost">←</button><span id="page-number">1</span><button id="next" class="button compact ghost">→</button></div></footer>
     <p class="calendar-note">日历仅导出明确且已核验、新鲜的截止记录；仅写日期的公告生成全天事件。导出为快照，延期后请重新导出。</p>
+  </section>
+  <section id="coverage-panel" class="panel" hidden>
+    <div class="panel-title"><div><span class="section-number">◎</span><h2>全国覆盖与缺口</h2></div><a id="coverage-export" class="text-button" href="/exports/coverage.csv">↓ 企业缺口 CSV</a></div>
+    <p class="section-intro">从企业名录逐家找入口、找公告。集团有公告不等于子公司已覆盖；网络失败不等于没有招聘。全国底册尚未齐备，分母与覆盖率保持未知。</p>
+    <div id="coverage-summary" class="coverage-summary"></div>
+    <form id="coverage-filters" class="filters"><input name="q" aria-label="搜索覆盖企业" placeholder="搜索企业名称"><input name="cohort" type="number" aria-label="覆盖届别" placeholder="毕业届别" min="2000" max="2200"><select name="status" aria-label="覆盖状态"><option value="">全部覆盖状态</option><option value="missing_entry">入口待接入</option><option value="blocked">访问受阻</option><option value="not_checked">尚未检查</option><option value="stale">需要复查</option><option value="not_found">暂未发现当届校招</option><option value="campus_found">已发现当届校招</option></select><select name="registry" aria-label="企业名录"><option value="">全部名录 / 已知企业</option></select><button class="button dark">查找缺口</button></form>
+    <details class="subsection"><summary>导入已核对的官方企业底册（CSV）</summary><p class="muted">支持 企业名称 / 公司名称 / name 列及可选 官网地址 列。文件保存在本机；导入名单不表示已采集招聘，也不代表此地区名单完整。</p><form id="registry-import-form" class="import-form"><select name="registry_id" aria-label="导入底册所属名录" required></select><input name="proof_url" type="url" aria-label="底册官方依据链接" placeholder="官方名录原始链接" required><input name="file" type="file" accept=".csv,text/csv" aria-label="企业底册 CSV" required><label><input name="confirmed" type="checkbox" required> 我已核对文件中的企业及其官方名录来源</label><button class="button dark">保存企业底册</button></form></details>
+    <p id="coverage-total" class="section-intro"></p>
+    <div class="table-scroll"><table class="opportunity-table"><thead><tr><th>企业 / 集团</th><th>名录与地区</th><th>覆盖缺口</th><th>独立入口</th><th>当届活动</th></tr></thead><tbody id="coverage-rows"></tbody></table></div>
+    <footer class="list-footer"><span>缺少入口的企业优先展示</span><div class="pagination"><button id="coverage-prev" class="button compact ghost">←</button><span id="coverage-page"></span><button id="coverage-next" class="button compact ghost">→</button></div></footer>
+    <details class="subsection" open><summary>全国名录接入状态（含尚未接入的地区）</summary><div id="registry-list" class="sources-grid"></div></details>
   </section>
   <section id="sources-panel" class="panel" hidden><div class="panel-title"><div><span class="section-number">02</span><h2>信源与运行</h2></div><span class="tag">每 6 小时巡查</span></div><div class="section-intro">入口存在不代表采集成功。只把实际取得公告的来源计入可用来源，分页未完成会单独标注。</div><div id="sources-list" class="sources-grid"></div><div class="subsection"><h3>模型与解析队列</h3><div id="providers-list"></div><p class="muted" id="model-note"></p></div><div class="subsection"><h3>最近同步</h3><div id="runs-list"></div></div></section>
   <section id="imports-panel" class="panel" hidden><div class="panel-title"><div><span class="section-number">03</span><h2>导入招聘线索</h2></div><span class="tag">CSV</span></div><div class="section-intro">把飞书或其他表格导出的 CSV 放进来。导入内容先进入待核验区，确认官方原文后再进入临期列表。</div><form id="import-form" class="import-form"><label class="file-drop"><span>↥</span><strong>选择一份 CSV 文件</strong><small>支持 UTF-8 / GB18030 · 最大 5 MB · 每次 2,000 行</small><input type="file" name="file" accept=".csv,text/csv" required></label><details><summary>自定义列名映射（可选）</summary><p class="muted">默认识别公司名称、招聘公告、公告链接、投递链接、截止日期、届次等列。格式为内部字段到 CSV 列名的 JSON 对象。</p><textarea name="mapping" rows="4" aria-label="CSV列名映射" placeholder='{"employer":"企业名称","url":"网申公告链接"}'></textarea></details><button class="button dark" type="submit">导入到待核验区 ↗</button><pre id="import-result" hidden></pre></form></section>

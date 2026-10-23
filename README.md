@@ -2,7 +2,7 @@
 
 个人本地运行的国央企校招工作台：采集官方公告、提取投递截止、保存原文证据、跟踪延期，按届别持续使用。
 
-**项目首要目标是全国国央企校招的覆盖完整性。** 十个预置入口是起步样本，不是覆盖范围或完成标准；后续按企业名录逐家扩展集团、子公司与地方国企，并公开未接入、采集受阻和待核验的缺口。完整要求与下一步实施顺序见 [覆盖完整性要求](docs/requirements/completeness.md)。
+**项目首要目标是全国国央企校招的覆盖完整性。** 预置入口只是起步样本，不是覆盖范围或完成标准；后续按企业名录逐家扩展集团、子公司与地方国企，并公开未接入、采集受阻和待核验的缺口。完整要求与下一步实施顺序见 [覆盖完整性要求](docs/requirements/completeness.md)。
 
 **爬虫取内容，模型做理解，规则做校验。** 有证据的记录自动入库，冲突、不完整和未知截止进入待核验区。没有模型凭证时仍可采集、做规则解析及浏览历史。
 
@@ -28,7 +28,7 @@ uv run soe-radar sync --sources boc,chnenergy
 uv run soe-radar doctor --live
 ```
 
-已验证的本机运行结果与限制见 [验证记录](docs/implementation/validation.md)。**十个预置来源不等于十个全部可抓成功的来源**；当前网络、站点改版、动态加载和附件读取都会影响实际覆盖，界面展示每个来源的真实状态。
+已验证的本机运行结果与限制见 [验证记录](docs/implementation/validation.md)。**预置来源不等于已成功采集的来源**；当前网络、站点改版、动态加载和附件读取都会影响实际覆盖，界面展示每个来源的真实状态。
 
 ## 已实现
 
@@ -37,6 +37,8 @@ uv run soe-radar doctor --live
 - 关注、已投状态及个人备注，保存在本地 SQLite。
 - 待核验与人工确认，确认时重新读取官方公告；单独发布的变更可关联原招聘活动。
 - 来源健康、断点续跑、数据库租约、防止重复同步、重启恢复。
+- 全国覆盖与缺口台账：已知主体、独立入口、当届活动、访问受阻、待接入名录分别展示；全国分母未知时不生成覆盖率。
+- 官方企业名录版本、带来源确认的底册 CSV 导入、缺口 CSV 导出；31 个省级地区保留待接入槽位，不计为已覆盖。
 - CSV 字段映射导入 / 导出；导入默认为第三方线索，不会因填了官方 URL 就自动通过。
 - ICS 日历：只导出已核验、未关闭且最近 48 小时内核验的明确截止；日期精度生成全天事件。文件是快照，延期后需重新导出。
 - 规则、OpenAI 兼容 Chat Completions、Responses、本机 Codex CLI 三种解析入口。
@@ -80,7 +82,7 @@ llm:
 
 ## 采集方式与来源
 
-预置：`boc` 中国银行、`chnenergy` 国家能源、`sh-sasac` 上海国资委、`sasac` 国资委、`ncss` 国家就业平台、`cmcc` 中国移动、`telecom` 中国电信、`unicom` 中国联通、`cnpc` 中国石油、`sinopec` 中国石化。
+预置：`boc` 中国银行、`chnenergy` 国家能源、`sh-sasac` 上海国资委、`sasac` 国资委、`ncss` 国家就业平台、`cmcc` 中国移动、`telecom` 中国电信、`unicom` 中国联通、`cnpc` 中国石油、`sinopec` 中国石化、`csg` 南方电网。
 
 - 静态 HTML / 公开 JSON 优先；NCSS 使用公开岗位 JSON 接口并按国有企业性质过滤。平台信息仍需企业身份与报名证据校验。
 - 文字型 PDF 提取正文并保存附件版本。扫描图片、失败附件和含糊适用范围进入待核验。
@@ -112,6 +114,29 @@ employers:
 人工确认子公司时也可在审核表单选择母集团并提交关系依据链接。
 
 上面的名称仅示意配置格式，使用时替换为实际企业及其隶属关系证明。系统不会仅凭名称相似就认定国企或自动推断母子公司。
+
+## 覆盖台账与采集网络
+
+```bash
+uv run soe-radar coverage --cohort 2027
+uv run soe-radar registry-refresh --ids central-sasac,central-mof
+uv run soe-radar doctor --network --source sasac --source boc
+```
+
+`coverage` 的默认届别为运行时下一届，也可明确指定；名单、招聘季和原文年份不会被自动改写。配置 `registries` 按 `id` 合并，空列表关闭名录刷新。名录读取成功每七天复查、失败每日重试，失败保留已有名单和历史。网页“全国覆盖”列出未知分母和未接入地区，并支持导入已核对的官方 CSV：
+
+```bash
+uv run soe-radar registry-import 官方企业底册.csv --registry local-01 \
+  --proof-url https://官方政府域名/名录页面 --confirm-official
+```
+
+CSV 支持 `企业名称` / `公司名称` / `name` 列，可选 `官网地址` / `official_url` 列。导入需要明确确认来源并保留原文件，不能据此声称取得招聘内容或该地区名单已完整。
+
+采集网络默认 `network_mode: env`。可设为 `direct`（忽略代理环境变量）、`proxy`（只使用采集代理）或 `auto`（默认路径失败后尝试已配置代理，否则尝试 direct）。代理地址填写 `.env` 的 `SOE_RADAR_HTTP_PROXY`；仅支持 HTTP(S) 代理，不是订阅地址。模型请求不使用此采集配置。
+
+每个 `sources` / `registries` 条目也可配置 `network_mode` 覆盖全局设置。`doctor --network` 分别报告路径与脱敏的 HTTP/连接错误；HTTP 可读不代表招聘采集成功。`direct` 仍可能经过系统 TUN/VPN，程序不会修改系统分流或忽略证书错误；401、429 不通过切换路径重试。
+
+南网采用官网前端使用的公开列表及正文接口，不登录、不读取令牌；真实可用情况与当前限制见 [本轮扩覆盖记录](docs/implementation/2026-10-23-coverage.md)。
 
 ## 跨年度使用
 

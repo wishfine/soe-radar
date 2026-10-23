@@ -118,3 +118,29 @@ def test_subsidiary_brand_is_not_silently_replaced_by_parent_group():
         )
     )
     assert result.employer == "天翼数字生活"
+
+
+def test_branch_name_after_parent_legal_name_is_not_collapsed():
+    from soe_radar.extraction import extract_rules
+    from soe_radar.schemas import DocumentInput
+
+    for name in ["中国南方电网有限责任公司超高压输电公司", "中国南方电网有限责任公司北京分公司"]:
+        document = DocumentInput(
+            url="https://zhaopin.csg.cn/test",
+            title=name + "2027年校园招聘公告",
+            text="面向2027届应届毕业生，报名截止2026年11月2日。",
+            employer_hint="中国南方电网有限责任公司",
+        )
+        assert extract_rules(document).employer == name
+
+
+def test_multiline_deadline_with_sentence_ending_is_kept_with_exact_quote():
+    from soe_radar.extraction import extract_rules
+    from soe_radar.schemas import DocumentInput
+
+    text = "招聘流程。\n简历投递截止时间为：\n即日起至\n2026年11月2日24:00。\n应聘者请投递。"
+    result = extract_rules(
+        DocumentInput(url="https://example.org/notice", title="示例公司2027校园招聘", text=text)
+    )
+    assert result.deadline.value == "2026-11-03T00:00:00+08:00"
+    assert result.deadline.quote in text

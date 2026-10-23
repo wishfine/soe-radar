@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
@@ -17,7 +18,9 @@ def public_url(url: str) -> str:
     except ValueError as exc:
         if "私有" in str(exc):
             raise
-    return urlunsplit((parts.scheme, parts.netloc, parts.path or "/", parts.query, ""))
+    # SPA routes identify distinct public announcements. Ordinary page anchors do not.
+    fragment = parts.fragment if parts.fragment.startswith(("/", "!/")) else ""
+    return urlunsplit((parts.scheme, parts.netloc, parts.path or "/", parts.query, fragment))
 
 
 def on_domains(url: str, domains: list[str]) -> bool:
@@ -27,9 +30,25 @@ def on_domains(url: str, domains: list[str]) -> bool:
 
 def canonical(url: str) -> str:
     parts = urlsplit(public_url(url))
-    query = [
-        (k, v)
-        for k, v in parse_qsl(parts.query, keep_blank_values=True)
-        if not k.startswith("utm_") and k not in ("from", "from_source", "spm", "eqid", "CT6T", "CT6TS")
-    ]
-    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path, urlencode(query), ""))
+    if (
+        parts.hostname == "zhaopin.csg.cn"
+        and parts.path == "/notice-details"
+        and re.fullmatch(r"[A-Fa-f0-9]{32}", dict(parse_qsl(parts.query)).get("id", ""))
+    ):
+        parts = parts._replace(path="/", query="", fragment="/notice-details?" + parts.query)
+
+    def clean_query(value):
+        query = [
+            (k, v)
+            for k, v in parse_qsl(value, keep_blank_values=True)
+            if not k.startswith("utm_") and k not in ("from", "from_source", "spm", "eqid", "CT6T", "CT6TS")
+        ]
+        return urlencode(query)
+
+    fragment = parts.fragment
+    if "?" in fragment:
+        route, _, query = fragment.partition("?")
+        fragment = route + "?" + clean_query(query)
+    return urlunsplit(
+        (parts.scheme.lower(), parts.netloc.lower(), parts.path, clean_query(parts.query), fragment)
+    )

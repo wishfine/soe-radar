@@ -169,6 +169,29 @@ class SourceState(Base):
     last_count: Mapped[int] = mapped_column(Integer, default=0)
     peak_count: Mapped[int] = mapped_column(Integer, default=0)
     cursor: Mapped[dict] = mapped_column(JSON, default=dict)
+    network_attempts: Mapped[list] = mapped_column(JSON, default=list)
+
+
+class RegistrySnapshot(Base):
+    __tablename__ = "registry_snapshots"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
+    registry_id: Mapped[str] = mapped_column(String, index=True)
+    digest: Mapped[str] = mapped_column(String)
+    source_url: Mapped[str] = mapped_column(String)
+    fetched_at: Mapped[str] = mapped_column(String, default=stamp)
+    entries: Mapped[list] = mapped_column(JSON, default=list)
+    raw_path: Mapped[str] = mapped_column(String)
+    __table_args__ = (UniqueConstraint("registry_id", "digest"),)
+
+
+class RegistryState(Base):
+    __tablename__ = "registry_states"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    active_snapshot_id: Mapped[str | None] = mapped_column(ForeignKey("registry_snapshots.id"))
+    status: Mapped[str] = mapped_column(String, default="unverified")
+    last_attempt: Mapped[str | None] = mapped_column(String)
+    last_success: Mapped[str | None] = mapped_column(String)
+    last_error: Mapped[str] = mapped_column(String, default="")
 
 
 class CrawlRun(Base):

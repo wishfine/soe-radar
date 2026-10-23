@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from importlib.resources import files
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field, model_validator
@@ -49,6 +50,28 @@ class EmployerConfig(BaseModel):
         return self
 
 
+class RegistryConfig(BaseModel):
+    id: str
+    name: str
+    category: str
+    region: str = "全国"
+    url: str = ""
+    domains: list[str] = Field(default_factory=list)
+    name_columns: list[int] = Field(default_factory=lambda: [1])
+    min_entries: int = Field(default=1, ge=1)
+    network_mode: Literal["", "env", "direct", "proxy", "auto"] = ""
+
+    @model_validator(mode="after")
+    def check_url(self):
+        if self.url:
+            from .urls import on_domains, public_url
+
+            public_url(self.url)
+            if not self.domains or not on_domains(self.url, self.domains):
+                raise ValueError("名录入口必须位于明确配置的官方域名")
+        return self
+
+
 class Settings(BaseModel):
     timezone: str = "Asia/Shanghai"
     data_dir: Path = Path("data")
@@ -57,6 +80,10 @@ class Settings(BaseModel):
     details_per_source: int = Field(default=50, ge=1, le=1000)
     request_delay: float = Field(default=1, ge=0)
     http_timeout: int = Field(default=25, ge=1, le=180)
+    network_mode: Literal["env", "direct", "proxy", "auto"] = "env"
+    proxy_env: str = "SOE_RADAR_HTTP_PROXY"
+    coverage_fresh_hours: int = Field(default=48, ge=1)
+    registries: list[RegistryConfig] = Field(default_factory=list)
     allow_fake_ip_dns: bool = False
     browser_enabled: bool = False
     browser_channel: str | None = None
@@ -72,6 +99,9 @@ class Settings(BaseModel):
         ids = [x.id for x in self.sources]
         if len(ids) != len(set(ids)):
             raise ValueError("来源 id 不得重复")
+        registry_ids = [x.id for x in self.registries]
+        if len(registry_ids) != len(set(registry_ids)):
+            raise ValueError("名录 id 不得重复")
         from zoneinfo import ZoneInfo
 
         ZoneInfo(self.timezone)
@@ -98,8 +128,8 @@ def load_settings(path: Path | None = None) -> Settings:
 def merge(base: dict, override: dict) -> dict:
     result = dict(base)
     for key, value in override.items():
-        if key in ("sources", "providers") and isinstance(value, list) and value:
-            identity = "id" if key == "sources" else "name"
+        if key in ("sources", "providers", "registries") and isinstance(value, list) and value:
+            identity = "name" if key == "providers" else "id"
             entries = {e[identity]: dict(e) for e in result.get(key, [])}
             for entry in value:
                 entries[entry[identity]] = merge(entries.get(entry[identity], {}), entry)

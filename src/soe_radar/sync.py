@@ -246,6 +246,9 @@ class Pipeline:
         with self.db.session() as s:
             state = s.get(SourceState, source.id)
             state.status = status
+            state.network_attempts = [
+                a for a in self.fetcher.network_attempts if a["source_id"] == source.id
+            ][-30:]
             state.last_count = len(found)
             state.last_error = "；".join(errors[:4])
             state.cursor = {
@@ -446,4 +449,26 @@ class Scheduler:
                 run_id = queue_run(self.db)
             if run_id:
                 await execute_run(self.db, self.cfg, run_id)
+            # Recruitment runs retain priority; registry failures do not stop collection.
+            from .coverage import refresh_registries
+            from .models import RegistryState
+
+            with self.db.session() as s:
+                registry_states = {r.id: r for r in s.scalars(select(RegistryState))}
+            due_registries = []
+            for spec in self.cfg.registries:
+                previous = registry_states.get(spec.id)
+                retry_hours = 168 if previous and previous.status == "success" else 24
+                if spec.url and (
+                    not previous
+                    or not previous.last_attempt
+                    or (datetime.now(UTC) - datetime.fromisoformat(previous.last_attempt)).total_seconds()
+                    >= retry_hours * 3600
+                ):
+                    due_registries.append(spec.id)
+            if due_registries:
+                try:
+                    await refresh_registries(self.db, self.cfg, due_registries)
+                except ValueError:
+                    pass  # Another process holds the registry lease.
             await asyncio.sleep(20)

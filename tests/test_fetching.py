@@ -169,3 +169,100 @@ def test_lazy_poster_uses_real_image_url_instead_of_empty_src():
         "https://example.org/notice", '<article><img src="" data-original="/recruitment.png"></article>'
     )
     assert page.attachments[0]["url"] == "https://example.org/recruitment.png"
+
+
+async def test_csg_public_api_preserves_deadline_and_ignores_publisher_identity(cfg):
+    from soe_radar.extraction import extract_rules
+
+    source = next(s for s in cfg.sources if s.id == "csg")
+    announcement_id = "A" * 32
+
+    def response(req):
+        if "searchRecruitAnnouncement" in req.url.path:
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "list": [
+                            {"id": announcement_id, "title": "中国南方电网有限责任公司2027年校园招聘公告"}
+                        ]
+                    }
+                },
+            )
+        if "loadDetailById" in req.url.path:
+            return httpx.Response(
+                200,
+                json={
+                    "code": 200,
+                    "data": {
+                        "title": "中国南方电网有限责任公司2027年校园招聘公告",
+                        "publishTime": 1792396731829,
+                        "recruitType": 1,
+                        "staticPageDxUsAgentUcode": "public-resource-code",
+                        "creatorName": "不需要的发布人字段",
+                    },
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "code": 200,
+                "data": "<h1>2027年校园招聘</h1><p>中国南方电网有限责任公司2027年校园招聘已启动。报名截止时间为2026年11月2日24:00。应聘者请通过官方网站投递。</p>",
+            },
+        )
+
+    fetcher = Fetcher(cfg, transport=httpx.MockTransport(response))
+    try:
+        listing = await fetcher.page(source.url, source)
+        candidates = fetcher.candidates(listing, source)
+        assert len(candidates) == 1
+        document = await fetcher.document(*[candidates[0][0], source])
+        assert document.published_at == date(2026, 10, 19)
+        assert "发布人字段" not in document.text
+        result = extract_rules(document)
+        assert result.cohorts == [2027]
+        assert result.deadline.value == "2026-11-03T00:00:00+08:00"
+        assert "报名截止时间" in result.deadline.quote
+    finally:
+        await fetcher.close()
+
+
+async def test_post_pagination_is_sent_in_json_not_gateway_query(cfg):
+    import json
+
+    source = SourceSpec(
+        id="post",
+        name="公开列表",
+        url="https://example.org/api?limit=1&pageNo=2",
+        domains=["example.org"],
+        adapter="json",
+        api_method="POST",
+        api_body={"pageNo": 1, "pageSize": 1},
+        api_next_param="pageNo",
+        api_items_path="items",
+    )
+    requests = []
+
+    def response(request):
+        requests.append(request)
+        return httpx.Response(200, json={"items": [{"title": "2027校园招聘", "url": "/notice"}]})
+
+    f = Fetcher(cfg, transport=httpx.MockTransport(response))
+    try:
+        page = await f.page(source.url, source)
+        assert not requests[0].url.query
+        assert json.loads(requests[0].content)["pageNo"] == 2
+        assert any("pageNo=3" in url for url, label in page.links if label == "下一页")
+    finally:
+        await f.close()
+
+
+def test_spa_announcement_fragments_are_preserved_and_do_not_collapse_ids():
+    from soe_radar.urls import canonical
+
+    one = "https://zhaopin.csg.cn/#/notice-details?id=" + "A" * 32 + "&recuitType=1"
+    two = one.replace("A" * 32, "B" * 32)
+    assert "#/notice-details?" in public_url(one)
+    assert canonical(one) != canonical(two)
+    assert canonical(one) == canonical(one.replace("/#/notice-details", "/notice-details"))
+    assert canonical("https://example.org/notice#footer") == "https://example.org/notice"

@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from .schemas import Claim, DeadlineKind, DocumentInput, ExtractionResult, Position
 
-PARSER_VERSION = "2026-10-v9"
+PARSER_VERSION = "2026-10-v11"
 DATE_RE = re.compile(
     r"(?<!\d)(?<!\d:)(?<!\d：)(?:(20\d{2})\s*[年./\-]\s*)?(\d{1,2})\s*[月./\-]\s*(\d{1,2})(?![\d:：])\s*日?"
 )
@@ -139,7 +139,21 @@ def extract_rules(document: DocumentInput) -> ExtractionResult:
     )
     if 2 < len(subject) < 70 and re.search(r"公司|集团|银行|研究院|中心|科技", subject):
         entity = re.match(r"(.+?(?:股份有限公司|有限责任公司|有限公司))", subject)
-        subject = entity.group(1) if entity else re.split(r"公开招聘|招聘|解决方案部|总经理岗位", subject)[0]
+        branch = subject[entity.end() :] if entity else ""
+        keep_branch = bool(
+            branch
+            and re.fullmatch(
+                r".{0,35}(?:分公司|公司|分行|分中心|中心|研究院|研究所|事业部|分部|总部)", branch
+            )
+            and not re.search(r"招聘|岗位|启动|开启|公示|拟录用", branch)
+        )
+        subject = (
+            subject
+            if keep_branch
+            else entity.group(1)
+            if entity
+            else re.split(r"公开招聘|招聘|解决方案部|总经理岗位", subject)[0]
+        )
         hint = document.employer_hint
         result.employer = (
             hint
@@ -268,12 +282,16 @@ def extract_rules(document: DocumentInput) -> ExtractionResult:
         if APPLY.search(raw):
             tail = text[segment.end() :]
             for line in tail.splitlines()[1:]:
+                ending = bool(re.search(r"[。；;！？]$", line))
+                line = line.rstrip("。；;！？")
                 if len(raw) > 250 or not re.fullmatch(
                     r"\s*(?:(?:自|至|截至|即日起)[：:]?)?[\d\s年月日时点分北京时间至到—～~:：./()（）\-]+\s*",
                     line,
                 ):
                     break
                 raw += "\n" + line
+                if ending:
+                    break
         # A deadline heading may be on the preceding line; retain a short bounded window only.
         for marker in APPLY.finditer(raw):
             begin = max(0, marker.start() - 15)

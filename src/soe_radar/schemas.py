@@ -129,6 +129,7 @@ class SourceSpec(BaseModel):
     id: str
     name: str
     url: str
+    homepage_url: str = ""
     domains: list[str]
     employer: str = ""
     aliases: list[str] = Field(default_factory=list)
@@ -147,6 +148,7 @@ class SourceSpec(BaseModel):
     api_body: dict = Field(default_factory=dict)
     fallback_urls: list[str] = Field(default_factory=list)
     entry_is_document: bool = False
+    network_mode: Literal["", "env", "direct", "proxy", "auto"] = ""
 
 
 def local_now() -> datetime:

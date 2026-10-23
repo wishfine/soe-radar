@@ -317,7 +317,8 @@ def create_app(cfg: Settings | None = None, *, scheduling=True):
                     {
                         "id": source.id,
                         "name": source.name,
-                        "url": source.url,
+                        "url": source.homepage_url or source.url,
+                        "crawl_url": source.url,
                         "enabled": source.enabled,
                         "status": "no_recruitment"
                         if state and state.status in ("success", "partial") and not campus
@@ -329,6 +330,8 @@ def create_app(cfg: Settings | None = None, *, scheduling=True):
                         "last_count": state.last_count if state else 0,
                         "failures": state.failures if state else 0,
                         "cursor": state.cursor if state else {},
+                        "network_mode": source.network_mode or cfg.network_mode,
+                        "network_attempts": state.network_attempts if state else [],
                         "campus_count": len(campus),
                         "verified_count": sum(
                             x.review_status in ("auto", "manual") and not x.needs_review for x in campus
@@ -420,6 +423,114 @@ def create_app(cfg: Settings | None = None, *, scheduling=True):
                 {"id": e.id, "name": e.name, "parent_id": e.parent_id}
                 for e in s.scalars(select(Employer).order_by(Employer.name))
             ]
+
+    @app.get("/api/coverage")
+    async def coverage(
+        cohort: int | None = None,
+        q: str = "",
+        status: str = "",
+        region: str = "",
+        registry: str = "",
+        page: int = 1,
+        page_size: int = 50,
+    ):
+        from .coverage import coverage_report
+
+        report = coverage_report(db, cfg, cohort=cohort)
+        rows = report["items"]
+        if q:
+            rows = [r for r in rows if q.lower() in r["name"].lower()]
+        if status:
+            rows = [r for r in rows if r["status"] == status]
+        if region:
+            rows = [r for r in rows if region in r["regions"]]
+        if registry:
+            rows = [r for r in rows if registry in r["registry_ids"]]
+        report["total"] = len(rows)
+        page, page_size = max(1, page), max(1, min(200, page_size))
+        report["items"] = rows[(page - 1) * page_size : page * page_size]
+        return report
+
+    @app.post("/api/registries/{registry_id}/refresh")
+    async def registry_refresh(registry_id: str):
+        from .coverage import refresh_registries
+
+        if registry_id not in {r.id for r in cfg.registries}:
+            raise HTTPException(404, "未知名录")
+        try:
+            return await refresh_registries(db, cfg, [registry_id])
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+
+    @app.post("/api/registries/{registry_id}/imports")
+    async def import_registry(registry_id: str, request: Request):
+        from .coverage import import_registry_csv
+
+        spec = next((r for r in cfg.registries if r.id == registry_id), None)
+        if not spec:
+            raise HTTPException(404, "未知名录")
+        form = await request.form(max_part_size=5_000_000)
+        upload = form.get("file")
+        if not upload or not hasattr(upload, "read"):
+            raise HTTPException(422, "请选择企业底册 CSV")
+        try:
+            return import_registry_csv(
+                db,
+                cfg,
+                spec,
+                await upload.read(5_000_001),
+                str(form.get("proof_url") or ""),
+                confirmed=form.get("confirmed") == "on",
+            )
+        except (ValueError, UnicodeError) as exc:
+            raise HTTPException(422, str(exc))
+
+    @app.get("/exports/coverage.csv")
+    async def coverage_csv(cohort: int | None = None):
+        import csv
+        import io
+
+        from .coverage import coverage_report
+        from .exports import safe_cell
+
+        report = coverage_report(db, cfg, cohort=cohort)
+        stream = io.StringIO(newline="")
+        writer = csv.writer(stream)
+        writer.writerow(
+            [
+                "企业名称",
+                "名录",
+                "地区",
+                "覆盖状态",
+                "独立监测入口",
+                "目标届别",
+                "当届校招",
+                "待补证活动",
+                "性质依据",
+            ]
+        )
+        for row in report["items"]:
+            writer.writerow(
+                [
+                    safe_cell(x)
+                    for x in [
+                        row["name"],
+                        row["registry_ids"],
+                        row["regions"],
+                        row["status"],
+                        [x["url"] for x in row["sources"]],
+                        report["cohort"],
+                        row["campus_count"],
+                        row["pending_count"],
+                        row["proof_url"],
+                    ]
+                ]
+            )
+        return Response(
+            ("\ufeff" + stream.getvalue()).encode(),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="soe-radar-coverage.csv"'},
+        )
 
     @app.post("/api/reviews/{opportunity_id}")
     async def review(opportunity_id: str, body: ReviewInput):

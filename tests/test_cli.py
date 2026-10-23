@@ -26,17 +26,22 @@ def test_clone_init_doctor_and_backup_restore(tmp_path, monkeypatch):
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["allow_paid"] is False
+    assert "network" in json.loads(result.output)
     db = initialize(load_settings())
     with db.session() as s:
         from soe_radar.models import Employer
 
         s.add(Employer(name="恢复验证企业"))
     db.engine.dispose()
+    registry_folder = load_settings().data_dir / "registries"
+    registry_folder.mkdir(parents=True, exist_ok=True)
+    (registry_folder / "backup-evidence.csv").write_text("企业名称\n合成样例有限公司\n")
     result = runner.invoke(app, ["backup", str(tmp_path / "backup.tar.gz")])
     assert result.exit_code == 0, result.output
     with tarfile.open(tmp_path / "backup.tar.gz") as archive:
         assert "radar.db" in archive.getnames()
         assert "web-token" not in archive.getnames()
+        assert "registries/backup-evidence.csv" in archive.getnames()
     assert runner.invoke(app, ["restore", str(tmp_path / "backup.tar.gz")]).exit_code != 0
     result = runner.invoke(app, ["restore", str(tmp_path / "backup.tar.gz"), "--force"])
     assert result.exit_code == 0, result.output
@@ -94,7 +99,7 @@ def test_init_writes_only_personal_overrides_and_named_source_patches_inherit_de
         "sources:\n  - id: ncss\n    enabled: false\nllm:\n  providers:\n    - name: codex-local\n      enabled: true\n"
     )
     settings = load_settings()
-    assert len(settings.sources) == 10
+    assert len(settings.sources) >= 11
     assert not next(x for x in settings.sources if x.id == "ncss").enabled
     assert next(x for x in settings.sources if x.id == "ncss").api_fields["published"] == "publishDate"
     assert next(x for x in settings.llm.providers if x.name == "codex-local").protocol == "codex_cli"

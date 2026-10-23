@@ -176,7 +176,7 @@ def ingest(
             )
         ):
             employer.org_type = "soe"
-            employer.proof_url = source.url
+            employer.proof_url = source.homepage_url or source.url
             employer.verified_at = stamp()
             employer.industry = source.industry
         if manual and proof_url:

@@ -76,7 +76,7 @@ def seed(s: Session, cfg: Settings):
                     name=source.employer,
                     aliases=source.aliases,
                     org_type="soe",
-                    proof_url=source.url,
+                    proof_url=source.homepage_url or source.url,
                     industry=source.industry,
                 )
             )

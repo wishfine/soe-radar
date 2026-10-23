@@ -55,3 +55,11 @@
 `GET /exports/opportunities.csv`：接受列表筛选，UTF-8 BOM，防止表格公式注入。
 
 `GET /exports/deadlines.ics`：接受相同筛选，只包含明确日期或时刻、核验通过、未关闭且 48 小时内确认的机会。日期生成全天事件；时刻换算为 UTC。UID 绑定具体机会，延期递增 SEQUENCE。导出文件不是自动订阅服务。
+
+## 全国覆盖与名录
+
+- `GET /api/coverage`：`cohort/q/status/region/registry/page/page_size` 筛选；items 分页，summary 为所选届别的全部已知主体统计。全国底册未齐备时 `national_total` / `national_coverage_rate` 为 null。`discovered_by` 是历史线索发现渠道，不能替代独立入口覆盖。
+- `POST /api/registries/{id}/refresh`：读取已配置官方入口，数据库租约防重，失败保留旧版本。未配置入口不会虚构成功。
+- `POST /api/registries/{id}/imports`：multipart `file`（CSV，5MB/20,000 行上限）、`proof_url`、`confirmed=on`。需本地操作令牌和明确来源确认，保留原文件；未配置地区只接受政府官网依据，其他主体需先配置域名。导入不计招聘采集成功。
+- `GET /exports/coverage.csv?cohort=2027`：该届全部已知主体和缺口，含性质依据与独立入口，不只导出当前页。
+- `GET /api/health` 增加来源的 `network_mode/network_attempts/crawl_url`。`url` 为供用户打开的招聘入口，`crawl_url` 可以是公开采集接口；尝试记录仅保留主机及脱敏结果。

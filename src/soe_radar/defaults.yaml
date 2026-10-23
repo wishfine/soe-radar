@@ -5,6 +5,10 @@ source_pages: 5
 details_per_source: 50
 request_delay: 1.0
 http_timeout: 25
+# 仅控制招聘采集，不改变模型供应商或系统 VPN。
+network_mode: env
+proxy_env: SOE_RADAR_HTTP_PROXY
+coverage_fresh_hours: 48
 # 仅在已知可信的本机代理使用 198.18.0.0/15 Fake-IP DNS 时启用。
 allow_fake_ip_dns: false
 browser_enabled: false
@@ -126,3 +130,165 @@ sources:
     domains: [sinopec.com, sinopecgroup.com]
     industry: 石油化工
     browser: true
+
+  - id: csg
+    name: 南方电网
+    homepage_url: https://zhaopin.csg.cn/#/notice-list
+    employer: 中国南方电网有限责任公司
+    aliases: [南方电网, 南方电网公司]
+    industry: 能源电力
+    url: https://zhaopin.csg.cn/recruitment-dmz/service/announcement/searchRecruitAnnouncement?limit=30&pageNo=1
+    domains: [csg.cn]
+    adapter: csg
+    api_method: POST
+    api_body: {infoType: 11, pageNo: 1, pageSize: 30, recruitType: 1}
+    api_items_path: data.list
+    api_fields: {title: title, url: id, published: publishTime, type: recruitType}
+    api_url_template: https://zhaopin.csg.cn/#/notice-details?id={id}&recuitType=1
+    api_next_param: pageNo
+
+# 名录未成功读取时分母保持未知，不计为已覆盖。
+registries:
+  - id: central-sasac
+    name: 国务院国资委监管央企
+    category: central_sasac
+    url: https://wap.sasac.gov.cn/n2588045/n27271785/n27271792/c14159097/content.html
+    domains: [sasac.gov.cn]
+    name_columns: [1, 3]
+    min_entries: 80
+  - id: central-mof
+    name: 财政部出资企业及中央文化企业
+    category: central_mof
+    url: https://zcgls.mof.gov.cn/zhuantilanmu/czblz/202108/t20210817_3745862.htm
+    domains: [mof.gov.cn]
+    min_entries: 50
+  - id: central-finance
+    name: 中央金融企业（官方旧入口需重新核对）
+    category: central_finance
+  - id: central-other
+    name: 其他中央主管企业与所属单位
+    category: central_other
+  - id: local-01
+    name: 北京地方国企（名录待接入）
+    category: local
+    region: 北京
+  - id: local-02
+    name: 天津地方国企（名录待接入）
+    category: local
+    region: 天津
+  - id: local-03
+    name: 河北地方国企（名录待接入）
+    category: local
+    region: 河北
+  - id: local-04
+    name: 山西地方国企（名录待接入）
+    category: local
+    region: 山西
+  - id: local-05
+    name: 内蒙古地方国企（名录待接入）
+    category: local
+    region: 内蒙古
+  - id: local-06
+    name: 辽宁地方国企（名录待接入）
+    category: local
+    region: 辽宁
+  - id: local-07
+    name: 吉林地方国企（名录待接入）
+    category: local
+    region: 吉林
+  - id: local-08
+    name: 黑龙江地方国企（名录待接入）
+    category: local
+    region: 黑龙江
+  - id: local-09
+    name: 上海地方国企（名录待接入）
+    category: local
+    region: 上海
+  - id: local-10
+    name: 江苏地方国企（名录待接入）
+    category: local
+    region: 江苏
+  - id: local-11
+    name: 浙江地方国企（名录待接入）
+    category: local
+    region: 浙江
+  - id: local-12
+    name: 安徽地方国企（名录待接入）
+    category: local
+    region: 安徽
+  - id: local-13
+    name: 福建地方国企（名录待接入）
+    category: local
+    region: 福建
+  - id: local-14
+    name: 江西地方国企（名录待接入）
+    category: local
+    region: 江西
+  - id: local-15
+    name: 山东地方国企（名录待接入）
+    category: local
+    region: 山东
+  - id: local-16
+    name: 河南地方国企（名录待接入）
+    category: local
+    region: 河南
+  - id: local-17
+    name: 湖北地方国企（名录待接入）
+    category: local
+    region: 湖北
+  - id: local-18
+    name: 湖南地方国企（名录待接入）
+    category: local
+    region: 湖南
+  - id: local-19
+    name: 广东地方国企（名录待接入）
+    category: local
+    region: 广东
+  - id: local-20
+    name: 广西地方国企（名录待接入）
+    category: local
+    region: 广西
+  - id: local-21
+    name: 海南地方国企（名录待接入）
+    category: local
+    region: 海南
+  - id: local-22
+    name: 重庆地方国企（名录待接入）
+    category: local
+    region: 重庆
+  - id: local-23
+    name: 四川地方国企（名录待接入）
+    category: local
+    region: 四川
+  - id: local-24
+    name: 贵州地方国企（名录待接入）
+    category: local
+    region: 贵州
+  - id: local-25
+    name: 云南地方国企（名录待接入）
+    category: local
+    region: 云南
+  - id: local-26
+    name: 西藏地方国企（名录待接入）
+    category: local
+    region: 西藏
+  - id: local-27
+    name: 陕西地方国企（名录待接入）
+    category: local
+    region: 陕西
+  - id: local-28
+    name: 甘肃地方国企（名录待接入）
+    category: local
+    region: 甘肃
+  - id: local-29
+    name: 青海地方国企（名录待接入）
+    category: local
+    region: 青海
+  - id: local-30
+    name: 宁夏地方国企（名录待接入）
+    category: local
+    region: 宁夏
+  - id: local-31
+    name: 新疆地方国企（名录待接入）
+    category: local
+    region: 新疆

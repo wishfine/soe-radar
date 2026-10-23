@@ -170,7 +170,7 @@ def embedded_article(url, html):
 
 
 class Fetcher:
-    def __init__(self, cfg: Settings, *, transport=None):
+    def __init__(self, cfg: Settings, *, transport=None, route_transports=None):
         self.cfg = cfg
         self.client = httpx.AsyncClient(
             timeout=cfg.http_timeout,
@@ -182,14 +182,25 @@ class Fetcher:
             },
         )
         self.transport = transport
+        self.route_transports = route_transports or {}
+        self.clients = {"env": self.client}
+        self.network_attempts: list[dict] = []
         self._last_request: dict[str, float] = {}
         self.api_metadata: dict[str, dict] = {}
 
     async def close(self):
-        await self.client.aclose()
+        for client in self.clients.values():
+            await client.aclose()
 
     async def get(
-        self, url: str, domains: list[str] | None = None, *, method="GET", payload=None
+        self,
+        url: str,
+        domains: list[str] | None = None,
+        *,
+        method="GET",
+        payload=None,
+        network_mode=None,
+        source_id="",
     ) -> httpx.Response:
         import ipaddress
         import time
@@ -220,21 +231,56 @@ class Fetcher:
             elapsed = time.monotonic() - self._last_request.get(host, 0)
             await asyncio.sleep(max(0, self.cfg.request_delay - elapsed))
             self._last_request[host] = time.monotonic()
+            from .models import stamp
+            from .network import proxy_url, routes
+
+            try:
+                selected_routes = routes(self.cfg, network_mode)
+            except ValueError as exc:
+                raise FetchFailure(str(exc)) from exc
             response = None
-            for attempt in range(2):
-                try:
-                    response = await self.client.request(
-                        method, url, json=payload if method == "POST" else None
+            for route_index, route_name in enumerate(selected_routes):
+                if route_name not in self.clients:
+                    self.clients[route_name] = httpx.AsyncClient(
+                        timeout=self.cfg.http_timeout,
+                        follow_redirects=False,
+                        trust_env=False,
+                        proxy=proxy_url(self.cfg)
+                        if route_name == "proxy" and self.transport is None
+                        else None,
+                        transport=self.route_transports.get(route_name, self.transport),
+                        headers=dict(self.client.headers),
                     )
-                    if response.status_code >= 500 and attempt == 0:
+                for attempt in range(2):
+                    began = time.monotonic()
+                    item = {"source_id": source_id, "host": host, "route": route_name, "at": stamp()}
+                    try:
+                        response = await self.clients[route_name].request(
+                            method, url, json=payload if method == "POST" else None
+                        )
+                        item["status_code"] = response.status_code
+                    except (
+                        httpx.TimeoutException,
+                        httpx.NetworkError,
+                        httpx.RemoteProtocolError,
+                        httpx.ProxyError,
+                    ) as exc:
+                        response = None
+                        item["error"] = type(exc).__name__
+                    finally:
+                        item["duration_ms"] = round((time.monotonic() - began) * 1000)
+                        self.network_attempts.append(item)
+                        self.network_attempts = self.network_attempts[-200:]
+                    if response is not None and response.status_code < 500:
+                        break
+                    if attempt == 0:
                         await asyncio.sleep(1)
-                        continue
+                if response is not None and response.status_code not in (403, 412, 502, 503, 504):
                     break
-                except (httpx.TimeoutException, httpx.NetworkError) as exc:
-                    if attempt:
-                        raise FetchFailure(type(exc).__name__) from exc
+                if route_index + 1 == len(selected_routes):
+                    break
             if response is None:
-                raise FetchFailure("来源没有返回响应")
+                raise FetchFailure("网络路径均失败：" + " / ".join(selected_routes))
             if response.is_redirect:
                 url = urljoin(url, response.headers.get("location", ""))
                 continue
@@ -249,14 +295,29 @@ class Fetcher:
         detail = detail or source.entry_is_document
         failure = ""
         try:
-            is_api = source.adapter == "json" and urlsplit(url).path == urlsplit(source.url).path
+            if source.adapter == "csg" and detail:
+                return await self.csg_document_page(url, source)
+            is_api = source.adapter in ("json", "csg") and urlsplit(url).path == urlsplit(source.url).path
             payload = dict(source.api_body)
+            request_url = url
             if is_api and source.api_next_param:
-                payload[source.api_next_param] = dict(parse_qsl(urlsplit(url).query)).get(
+                value = dict(parse_qsl(urlsplit(url).query)).get(
                     source.api_next_param, payload.get(source.api_next_param, 1)
                 )
+                payload[source.api_next_param] = int(value) if str(value).isdigit() else value
+                if source.api_method == "POST":
+                    parts = urlsplit(url)
+                    query = [
+                        (k, v) for k, v in parse_qsl(parts.query) if k not in (source.api_next_param, "limit")
+                    ]
+                    request_url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), ""))
             response = await self.get(
-                url, source.domains, method=source.api_method if is_api else "GET", payload=payload
+                request_url,
+                source.domains,
+                method=source.api_method if is_api else "GET",
+                payload=payload,
+                network_mode=source.network_mode,
+                source_id=source.id,
             )
             content_type = response.headers.get("content-type", "")
             if "pdf" in content_type or urlsplit(url).path.lower().endswith(".pdf"):
@@ -274,7 +335,11 @@ class Fetcher:
                     )
                 return Page(url=str(response.url), title=source.name + "招聘附件", text=text, via="pdf")
             if "json" in content_type:
-                return self.api_page(str(response.url), response.json(), source)
+                return self.api_page(
+                    url if is_api and source.api_method == "POST" else str(response.url),
+                    response.json(),
+                    source,
+                )
             encoding = re.search(rb'charset=["\s\']*([\w-]+)', response.content[:3000], re.I)
             if encoding:
                 try:
@@ -302,7 +367,22 @@ class Fetcher:
                 from playwright.async_api import async_playwright
 
                 async with async_playwright() as p:
-                    browser = await p.chromium.launch(channel=self.cfg.browser_channel)
+                    from .network import proxy_url, routes
+
+                    route_name = routes(self.cfg, source.network_mode)[0]
+                    launch = {"channel": self.cfg.browser_channel}
+                    if route_name == "direct":
+                        launch["args"] = ["--no-proxy-server"]
+                    elif route_name == "proxy":
+                        proxy = urlsplit(proxy_url(self.cfg))
+                        from urllib.parse import unquote
+
+                        launch["proxy"] = {"server": f"{proxy.scheme}://{proxy.hostname}:{proxy.port or 80}"}
+                        if proxy.username:
+                            launch["proxy"].update(
+                                username=unquote(proxy.username), password=unquote(proxy.password or "")
+                            )
+                    browser = await p.chromium.launch(**launch)
                     tab = await browser.new_page()
 
                     # Dynamic subrequests may fetch resources, but navigating away from the source is blocked.
@@ -333,12 +413,14 @@ class Fetcher:
                 if len(page.text) > 80 and (detail or self.candidates(page, source)):
                     return page
             except Exception as exc:
-                failure += (
-                    f"；浏览器：{type(exc).__name__} {str(exc).splitlines()[0][:180] if str(exc) else ''}"
-                )
+                failure += f"；浏览器：{type(exc).__name__}（请检查浏览器依赖与来源网络路径）"
         if self.cfg.jina_enabled:
             try:
-                response = await self.get("https://r.jina.ai/" + public_url(url))
+                response = await self.get(
+                    "https://r.jina.ai/" + public_url(url),
+                    network_mode=source.network_mode,
+                    source_id=source.id,
+                )
                 body = response.text
                 if len(body) < 100 or "captcha" in body.lower() or "403 Forbidden" in body:
                     raise FetchFailure("Reader 未取得有效正文")
@@ -354,6 +436,60 @@ class Fetcher:
         if source.browser and not self.cfg.browser_enabled:
             failure += "；可选浏览器采集未启用"
         raise FetchFailure(failure or "没有取得有效招聘内容")
+
+    async def csg_document_page(self, url, source):
+        """Public announcement metadata and HTML, as used by CSG's public frontend. No login/token."""
+        parts = urlsplit(url)
+        announcement_id = dict(parse_qsl(parts.query or parts.fragment.partition("?")[2])).get("id", "")
+        if not re.fullmatch(r"[A-Fa-f0-9]{32}", announcement_id):
+            raise FetchFailure("南方电网公告标识无效")
+        origin = "https://zhaopin.csg.cn"
+        meta_url = origin + "/recruitment-dmz/service/announcement/loadDetailById/" + announcement_id
+        response = await self.get(
+            meta_url, source.domains, network_mode=source.network_mode, source_id=source.id
+        )
+        payload = response.json()
+        meta = payload.get("data")
+        if (
+            payload.get("code") != 200
+            or not isinstance(meta, dict)
+            or not meta.get("staticPageDxUsAgentUcode")
+        ):
+            raise FetchFailure("南方电网公告元数据不可用")
+        body_url = (
+            origin
+            + "/recruitment-application-dmz/service/api/notice/findByNoticeUltra?"
+            + urlencode(
+                {
+                    "code": meta["staticPageDxUsAgentUcode"],
+                    "id": announcement_id,
+                    "type": "announcement",
+                    "t": meta.get("updateTime", ""),
+                }
+            )
+        )
+        body = (
+            await self.get(body_url, source.domains, network_mode=source.network_mode, source_id=source.id)
+        ).json()
+        if body.get("code") != 200 or not isinstance(body.get("data"), str):
+            raise FetchFailure("南方电网公告正文不可用")
+        soup = BeautifulSoup(body["data"], "html.parser")
+        # The public frontend uses these attributes for downloads; read literal URLs only.
+        for link in soup.select("a[archref]"):
+            link["href"] = link["archref"]
+        for image in soup.select("img[arcsrc]"):
+            image["src"] = image["arcsrc"]
+        page = extract_page(url, str(soup))
+        if len(page.text) < 40:
+            raise FetchFailure("南方电网公告正文过短")
+        page.title = meta.get("title") or page.title
+        page.via = "csg_public_api"
+        # Store recruitment facts only; publisher staff/account fields are irrelevant to extraction.
+        metadata = {
+            key: meta[key] for key in ("title", "publishTime", "recruitType", "recruitYear") if key in meta
+        }
+        self.api_metadata[canonical(url)] = metadata
+        return page
 
     def api_page(self, url, data, source):
         if not source.api_items_path:
@@ -426,11 +562,18 @@ class Fetcher:
         sections = [page.text]
         for attachment in page.attachments[:8]:
             item = dict(attachment)
-            if attachment["url"].lower().split("?")[0].endswith(".pdf") and on_domains(
+            parts = urlsplit(attachment["url"])
+            filename = dict(parse_qsl(parts.query)).get("fileName", "")
+            if (parts.path.lower().endswith(".pdf") or filename.lower().endswith(".pdf")) and on_domains(
                 attachment["url"], source.domains
             ):
                 try:
-                    response = await self.get(attachment["url"], source.domains)
+                    response = await self.get(
+                        attachment["url"],
+                        source.domains,
+                        network_mode=source.network_mode,
+                        source_id=source.id,
+                    )
                     item["sha256"] = hashlib.sha256(response.content).hexdigest()
                     folder = self.cfg.data_dir / "attachments"
                     folder.mkdir(parents=True, exist_ok=True)
@@ -451,7 +594,12 @@ class Fetcher:
                 item["status"] = "needs_review"
                 if on_domains(attachment["url"], source.domains):
                     try:
-                        response = await self.get(attachment["url"], source.domains)
+                        response = await self.get(
+                            attachment["url"],
+                            source.domains,
+                            network_mode=source.network_mode,
+                            source_id=source.id,
+                        )
                         mime = response.headers.get("content-type", "").split(";")[0]
                         suffix = {
                             "image/png": ".png",

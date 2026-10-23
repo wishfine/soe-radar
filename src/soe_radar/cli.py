@@ -74,6 +74,9 @@ def doctor(
     source: list[str] | None = typer.Option(None, help="只检查指定来源，可重复"),
     model: bool = typer.Option(False, help="显式发起一次配置允许的模型解析检查"),
     reset_provider: str | None = typer.Option(None, help="解除指定供应商暂停，更新凭证后使用"),
+    network: bool = typer.Option(
+        False, help="对指定来源分别检查 env/direct/已配置 proxy 路径，不改变系统 VPN"
+    ),
 ):
     """检查依赖、配置和来源。默认不请求模型。"""
     cfg = load_settings()
@@ -101,12 +104,49 @@ def doctor(
         ],
         "note": "免费费用声明来自个人配置与供应商文档，不会自动升级到收费模型；请勿开启供应商自动充值。",
     }
+    from .network import network_context, proxy_url
+
+    result["network"] = network_context(cfg)
 
     async def checks():
         fetcher = Fetcher(cfg)
         rows = []
         try:
-            if live:
+            if network:
+                for spec in cfg.sources:
+                    if source and spec.id not in source:
+                        continue
+                    for mode in ["env", "direct"] + (["proxy"] if proxy_url(cfg) else []):
+                        start = len(fetcher.network_attempts)
+                        try:
+                            response = await fetcher.get(
+                                spec.url, spec.domains, network_mode=mode, source_id=spec.id
+                            )
+                            rows.append(
+                                {
+                                    "id": spec.id,
+                                    "route": mode,
+                                    "status": "http_readable",
+                                    "http_status": response.status_code,
+                                    "note": "仅代表 HTTP 响应，不代表校招覆盖",
+                                    "attempts": fetcher.network_attempts[start:],
+                                }
+                            )
+                        except Exception as exc:
+                            from .fetching import FetchFailure
+
+                            rows.append(
+                                {
+                                    "id": spec.id,
+                                    "route": mode,
+                                    "status": "error",
+                                    "reason": str(exc)
+                                    if isinstance(exc, FetchFailure)
+                                    else type(exc).__name__,
+                                    "attempts": fetcher.network_attempts[start:],
+                                }
+                            )
+            elif live:
                 for spec in cfg.sources:
                     if source and spec.id not in source:
                         continue
@@ -119,6 +159,9 @@ def doctor(
                                 "status": "list_readable",
                                 "candidate_links": len(links),
                                 "note": "列表可读不等于所有详情已核验",
+                                "attempts": [
+                                    a for a in fetcher.network_attempts if a["source_id"] == spec.id
+                                ][-20:],
                             }
                         )
                     except Exception as exc:
@@ -140,11 +183,61 @@ def doctor(
 
     result["sources"] = (
         asyncio.run(checks())
-        if live or model
+        if live or model or network
         else [{"id": s.id, "url": s.url, "enabled": s.enabled, "status": "not_probed"} for s in cfg.sources]
     )
     output(result)
     db.engine.dispose()
+
+
+@app.command("coverage")
+def coverage(cohort: int | None = None):
+    """列出已知企业、未接入名录、网络受阻与当届活动覆盖。全国分母未知时不造覆盖率。"""
+    from .coverage import coverage_report
+
+    cfg = load_settings()
+    db = initialize(cfg)
+    output(coverage_report(db, cfg, cohort=cohort))
+    db.engine.dispose()
+
+
+@app.command("registry-refresh")
+def registry_refresh(ids: str | None = typer.Option(None, help="逗号分隔名录 id；默认刷新已配置入口")):
+    """读取官方企业名录并保存版本；失败保留原底册，不删除企业。"""
+    from .coverage import refresh_registries
+
+    cfg = load_settings()
+    selected = [x.strip() for x in ids.split(",") if x.strip()] if ids else None
+    if selected is not None and (not selected or set(selected) - {x.id for x in cfg.registries}):
+        raise typer.BadParameter("包含未知名录 id")
+    db = initialize(cfg)
+    output(asyncio.run(refresh_registries(db, cfg, selected)))
+    db.engine.dispose()
+
+
+@app.command("registry-import")
+def registry_import(
+    path: Path,
+    registry: str = typer.Option(..., "--registry"),
+    proof_url: str = typer.Option(...),
+    confirm_official: bool = typer.Option(False, help="明确确认已核对 CSV 来自官方底册"),
+):
+    """导入已核对的官方企业底册 CSV，保留文件与依据；不会计作招聘采集成功。"""
+    from .coverage import import_registry_csv
+
+    cfg = load_settings()
+    spec = next((r for r in cfg.registries if r.id == registry), None)
+    if not spec:
+        raise typer.BadParameter("未知名录 id")
+    db = initialize(cfg)
+    try:
+        with path.open("rb") as stream:
+            content = stream.read(5_000_001)
+        output(import_registry_csv(db, cfg, spec, content, proof_url, confirmed=confirm_official))
+    except (ValueError, UnicodeError, OSError) as exc:
+        raise typer.BadParameter(str(exc))
+    finally:
+        db.engine.dispose()
 
 
 @app.command()
@@ -206,7 +299,7 @@ def backup(destination: Path):
             source.backup(target)
         with tarfile.open(destination, "w:gz") as archive:
             archive.add(path, arcname="radar.db")
-            for name in ["snapshots", "attachments", "observations.jsonl"]:
+            for name in ["snapshots", "attachments", "registries", "observations.jsonl"]:
                 target = cfg.data_dir / name
                 if target.exists():
                     archive.add(target, arcname=name)
@@ -237,7 +330,8 @@ def restore(archive_path: Path, force: bool = typer.Option(False, help="替换�
                     "observations.jsonl",
                     "snapshots",
                     "attachments",
-                ) and not member.name.startswith(("snapshots/", "attachments/")):
+                    "registries",
+                ) and not member.name.startswith(("snapshots/", "attachments/", "registries/")):
                     raise typer.BadParameter("备份含非预期文件")
                 if (
                     member.issym()
@@ -257,7 +351,7 @@ def restore(archive_path: Path, force: bool = typer.Option(False, help="替换�
         for suffix in ["-wal", "-shm"]:
             Path(str(cfg.data_dir / "radar.db") + suffix).unlink(missing_ok=True)
         shutil.copy2(restored, cfg.data_dir / "radar.db")
-        for name in ["snapshots", "attachments", "observations.jsonl"]:
+        for name in ["snapshots", "attachments", "registries", "observations.jsonl"]:
             source = Path(tmp) / name
             if source.is_dir():
                 shutil.copytree(source, cfg.data_dir / name, dirs_exist_ok=True)
