@@ -1,0 +1,102 @@
+from datetime import date
+
+import httpx
+import pytest
+
+from soe_radar.fetching import Fetcher, FetchFailure, extract_page
+from soe_radar.schemas import SourceSpec
+from soe_radar.urls import on_domains, public_url
+
+
+def test_article_heading_and_publication_do_not_read_deadline():
+    page = extract_page(
+        "https://www.boc.cn/notice",
+        """<html><title>招聘网页</title><h1 class="logo"></h1>
+      <h2 class="title">示例银行2027届校园招聘公告</h2><p class="con_time">2026-09-03</p>
+      <div class="con_text"><p>报名截止时间为2026年10月9日24点。</p></div></html>""",
+    )
+    assert page.title == "示例银行2027届校园招聘公告"
+    assert page.published_at == date(2026, 9, 3)
+    assert "logo" not in page.text
+
+
+def test_official_domain_matching_is_not_a_substring_test():
+    assert on_domains("https://jobs.boc.cn/a", ["boc.cn"])
+    assert not on_domains("https://boc.cn.evil.example/a", ["boc.cn"])
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1/private",
+        "http://[::1]/",
+        "file:///tmp/file",
+        "http://169.254.169.254/latest",
+        "http://user:secret@example.org",
+    ],
+)
+def test_private_and_credentialed_urls_rejected(url):
+    with pytest.raises(ValueError):
+        public_url(url)
+
+
+async def test_redirect_cannot_escape_source_domains(cfg):
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(302, headers={"location": "https://evil.example/private"})
+    )
+    fetcher = Fetcher(cfg, transport=transport)
+    try:
+        with pytest.raises(FetchFailure, match="域名"):
+            await fetcher.get("https://www.boc.cn/notice", ["boc.cn"])
+    finally:
+        await fetcher.close()
+
+
+async def test_dynamic_shell_is_not_counted_as_a_working_source(cfg):
+    source = SourceSpec(id="test", name="测试", url="https://example.org", domains=["example.org"])
+    fetcher = Fetcher(
+        cfg,
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, text='<html><div id="app"></div></html>')
+        ),
+    )
+    try:
+        with pytest.raises(FetchFailure):
+            await fetcher.page(source.url, source)
+    finally:
+        await fetcher.close()
+
+
+def test_candidates_use_actual_announcements_and_drop_navigation():
+    source = SourceSpec(id="test", name="测试", url="https://example.org", domains=["example.org"])
+    page = extract_page(
+        source.url,
+        """<a href="/">招聘</a><a href="/notice">示例集团2027届校园招聘公告</a>
+      <a href="https://elsewhere.example/notice">另一个2027招聘公告</a>""",
+    )
+    assert Fetcher.candidates(page, source) == [("https://example.org/notice", "示例集团2027届校园招聘公告")]
+
+
+def test_body_images_are_not_silently_treated_as_parsed():
+    page = extract_page(
+        "https://example.org/news",
+        '<h1>示例集团2027届校园招聘</h1><div class="TRS_Editor"><img src="/poster.jpg" alt="招聘简章"></div>',
+    )
+    assert page.attachments == [{"url": "https://example.org/poster.jpg", "label": "招聘简章"}]
+
+
+def test_volatile_waf_parameters_do_not_create_different_announcements():
+    from soe_radar.urls import canonical
+
+    assert (
+        canonical("https://example.org/notice?id=123&CT6T=token&CT6TS=other")
+        == "https://example.org/notice?id=123"
+    )
+
+
+def test_trs_pagination_is_parsed_without_executing_javascript():
+    page = extract_page(
+        "https://www.boc.cn/aboutboc/bi4/index_4.html",
+        '<script>createPageHTML(18,4,"index","html");</script><p>共18页</p>',
+    )
+    assert ("https://www.boc.cn/aboutboc/bi4/index_5.html", "下一页") in page.links

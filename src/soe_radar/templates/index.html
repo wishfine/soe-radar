@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="radar-token" content="{{ token }}">
+  <meta name="description" content="个人使用的国央企校招截止时间雷达，每个日期都有出处。">
+  <title>SOE Radar · 国央企校招雷达</title>
+  <link rel="stylesheet" href="/static/style.css"><script src="/static/app.js" defer></script>
+</head>
+<body>
+<aside class="sidebar">
+  <a class="brand" href="/" aria-label="SOE Radar 首页"><span class="brand-symbol">◉</span><span>SOE<span class="brand-light"> RADAR</span><small>国央企校招雷达</small></span></a>
+  <div class="side-label">你的求职工作台</div>
+  <nav aria-label="主导航">
+    <button class="nav-item active" data-view="radar"><span>⌁</span> 机会雷达 <b class="nav-count" id="nav-active">—</b></button>
+    <button class="nav-item" data-view="saved"><span>☆</span> 我的关注</button>
+    <button class="nav-item" data-view="pending"><span>◷</span> 待核验 <b class="nav-count" id="nav-pending">—</b></button>
+    <button class="nav-item" data-view="history"><span>▤</span> 历年归档</button>
+    <div class="nav-divider"></div>
+    <button class="nav-item" data-view="sources"><span>⌘</span> 信源与运行</button>
+    <button class="nav-item" data-view="imports"><span>↥</span> 导入线索</button>
+  </nav>
+  <div class="side-bottom"><span class="status-dot"></span> LOCAL FIRST<small>数据与投递状态保存在本机<br>属于你，也跟随每一届招聘。</small><span class="edition">个人版 · v0.1.0</span></div>
+</aside>
+<main class="main">
+  <header class="topbar"><span class="breadcrumb">工作台 <span>/</span> <b id="breadcrumb">机会雷达</b></span><div class="top-actions"><span class="local-badge">仅本机访问</span><button class="button compact" id="sync-button"><span>↻</span> 同步来源</button></div></header>
+  <section class="hero">
+    <div><div class="eyebrow"><span></span> STAY AHEAD OF THE DEADLINE</div><h1 id="page-heading">下一次机会，<em>提前看见。</em></h1><p id="page-description">收好每一个投递窗口。明确的截止时间，都能回到原文核验。</p></div>
+    <div class="radar-art" aria-hidden="true"><div class="radar-ring r1"></div><div class="radar-ring r2"></div><div class="radar-ring r3"></div><div class="radar-cross"></div><div class="radar-sweep"></div><i class="blip b1"></i><i class="blip b2"></i><i class="blip b3"></i><span>OPPORTUNITY<br>IN SIGHT</span></div>
+  </section>
+  <section class="stats" aria-label="招聘统计">
+    <div class="stat"><span>已核验 · 在招</span><strong id="stat-active">—</strong><small>已确认的投递机会</small></div>
+    <div class="stat accent"><span>7 天内截止</span><strong id="stat-due">—</strong><small>留一点时间给下一步</small></div>
+    <div class="stat"><span>待核验线索</span><strong id="stat-pending">—</strong><small>不确定的信息单独确认</small></div>
+    <div class="stat"><span>可用来源</span><strong id="stat-sources">—</strong><small id="stat-sources-note">正在检查运行状态</small></div>
+  </section>
+  <div id="run-banner" class="run-banner" hidden role="status"></div>
+  <section id="list-panel" class="panel">
+    <div class="panel-title"><div><span class="section-number">01</span><h2 id="list-title">投递窗口</h2><span id="result-count" class="muted"></span></div><div class="export-actions"><a id="export-csv" class="text-button" href="/exports/opportunities.csv">↓ CSV</a><a id="export-ics" class="text-button" href="/exports/deadlines.ics">↗ 导出日历</a></div></div>
+    <div class="quick-filters" aria-label="快捷筛选"><button class="chip selected" data-days="">全部</button><button class="chip" data-days="0">今天截止</button><button class="chip" data-days="3">3 天内</button><button class="chip" data-days="7">7 天内</button><button class="chip" id="new-filter">7 天内发布</button><button class="chip" id="changed-filter">近期变更</button><label class="toggle"><input type="checkbox" id="unapplied"> 只看未投</label></div>
+    <form id="filters" class="filters"><label class="search"><span>⌕</span><input name="q" aria-label="搜索招聘信息" placeholder="搜索企业、岗位、专业或城市…" autocomplete="off"></label><select name="cohort" aria-label="毕业届别"><option value="">全部届别</option>{% for year in cohorts %}<option value="{{ year }}">{{ year }} 届</option>{% endfor %}</select><select name="industry" aria-label="行业"><option value="">全部行业</option></select><input name="region" aria-label="工作城市" placeholder="工作城市" class="small-input"><button type="button" class="button ghost" id="advanced-toggle" aria-expanded="false">更多筛选 ⌄</button><button type="submit" class="button dark">查找</button><div id="advanced" class="advanced" hidden><select name="employer" aria-label="集团或企业"><option value="">全部集团 / 企业</option>{% for employer in employers %}<option value="{{ employer.name }}">{{ employer.name }}</option>{% endfor %}</select><input name="education" aria-label="学历" placeholder="学历，如本科"><input name="major" aria-label="专业要求" placeholder="专业关键词"><input name="batch" aria-label="招聘批次" placeholder="批次，如提前批"><button type="reset" class="text-button">清空筛选</button></div></form>
+    <div id="list-notice" class="list-notice" hidden></div>
+    <div class="table-scroll"><table class="opportunity-table"><thead><tr><th class="company-col">企业 / 招聘活动</th><th>地点与届别</th><th>投递截止</th><th>核验</th><th class="action-col">我的投递</th></tr></thead><tbody id="opportunity-rows"></tbody></table></div>
+    <div class="empty-state" id="empty-state" hidden><div class="empty-symbol">⌁</div><h3 id="empty-title">雷达已准备就绪</h3><p id="empty-message">点击「同步来源」收集官方招聘公告。没有模型凭证也能使用规则解析。</p><button class="button dark" id="empty-action">同步来源 ↗</button></div>
+    <footer class="list-footer"><span id="updated-note">正在读取本地数据…</span><div class="pagination"><button id="previous" class="button compact ghost">←</button><span id="page-number">1</span><button id="next" class="button compact ghost">→</button></div></footer>
+    <p class="calendar-note">日历仅导出明确且已核验、新鲜的截止记录；仅写日期的公告生成全天事件。导出为快照，延期后请重新导出。</p>
+  </section>
+  <section id="sources-panel" class="panel" hidden><div class="panel-title"><div><span class="section-number">02</span><h2>信源与运行</h2></div><span class="tag">每 6 小时巡查</span></div><div class="section-intro">入口存在不代表采集成功。只把实际取得公告的来源计入可用来源，分页未完成会单独标注。</div><div id="sources-list" class="sources-grid"></div><div class="subsection"><h3>模型与解析队列</h3><div id="providers-list"></div><p class="muted" id="model-note"></p></div><div class="subsection"><h3>最近同步</h3><div id="runs-list"></div></div></section>
+  <section id="imports-panel" class="panel" hidden><div class="panel-title"><div><span class="section-number">03</span><h2>导入招聘线索</h2></div><span class="tag">CSV</span></div><div class="section-intro">把飞书或其他表格导出的 CSV 放进来。导入内容先进入待核验区，确认官方原文后再进入临期列表。</div><form id="import-form" class="import-form"><label class="file-drop"><span>↥</span><strong>选择一份 CSV 文件</strong><small>支持 UTF-8 / GB18030 · 最大 5 MB · 每次 2,000 行</small><input type="file" name="file" accept=".csv,text/csv" required></label><details><summary>自定义列名映射（可选）</summary><p class="muted">默认识别公司名称、招聘公告、公告链接、投递链接、截止日期、届次等列。格式为内部字段到 CSV 列名的 JSON 对象。</p><textarea name="mapping" rows="4" aria-label="CSV列名映射" placeholder='{"employer":"企业名称","url":"网申公告链接"}'></textarea></details><button class="button dark" type="submit">导入到待核验区 ↗</button><pre id="import-result" hidden></pre></form></section>
+  <footer class="page-footer"><span><b>SOE RADAR</b> · 每个日期，都有出处。</span><span id="clock"></span></footer>
+</main>
+<dialog id="detail-dialog" class="detail-dialog"><div class="dialog-heading"><span class="eyebrow">OPPORTUNITY FILE</span><button class="icon-button" id="close-detail" aria-label="关闭详情">×</button></div><div id="detail-body"></div></dialog>
+<div id="toast" class="toast" hidden role="status"></div>
+</body></html>

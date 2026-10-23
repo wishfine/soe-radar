@@ -1,0 +1,319 @@
+{
+  "survey_date_local": "2026-10-22",
+  "timezone": "Asia/Shanghai",
+  "scope": "全国国央企校园招聘优先",
+  "method": "GitHub repository search and public web search; README and selected code review; metadata and latest workflow snapshots; standalone reproduction of selected regex logic using synthetic inputs. No full crawler execution.",
+  "queries": [
+    "国企 招聘",
+    "央企 招聘",
+    "国央企",
+    "校招 截止",
+    "state owned recruitment China",
+    "site:github.com 国企 央企 招聘 截止",
+    "site:github.com 校招 招聘 信息 汇总 爬虫 截止时间"
+  ],
+  "repositories": [
+    {
+      "repository": "sespoir/guoqi-radar",
+      "url": "https://github.com/sespoir/guoqi-radar",
+      "stars": 2,
+      "last_pushed_at_utc": "2026-07-28T04:26:01Z",
+      "default_branch": "main",
+      "license_spdx_from_metadata": "MIT",
+      "reviewed_files": [
+        {
+          "path": "LICENSE",
+          "url": "https://github.com/sespoir/guoqi-radar/blob/main/LICENSE",
+          "blob_sha": "d3d5fabdedab08c2a23844e5fb49712653863485"
+        },
+        {
+          "path": "data/sources.ts",
+          "url": "https://github.com/sespoir/guoqi-radar/blob/main/data/sources.ts",
+          "blob_sha": "1b213ae1cbd25170781cac91ada0548675c0508c"
+        },
+        {
+          "path": "lib/agent.ts",
+          "url": "https://github.com/sespoir/guoqi-radar/blob/main/lib/agent.ts",
+          "blob_sha": "cac4efa19e4ceac92fbca881afcb3a1d1a38bec3"
+        },
+        {
+          "path": "lib/types.ts",
+          "url": "https://github.com/sespoir/guoqi-radar/blob/main/lib/types.ts",
+          "blob_sha": "314e37ad41b7302efc2f2097df0c91942594fd82"
+        },
+        {
+          "path": "README.md",
+          "url": "https://github.com/sespoir/guoqi-radar/blob/main/README.md",
+          "blob_sha": "7b83ada70001ce764591f7b78a35fd57322fa95e"
+        }
+      ],
+      "latest_workflow_run": [
+        {
+          "name": "Collect recruitment data and deploy Pages",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at_utc": "2026-09-27T20:11:45Z",
+          "event": "schedule",
+          "url": "https://github.com/sespoir/guoqi-radar/actions/runs/36347124173"
+        }
+      ]
+    },
+    {
+      "repository": "zhouyuzhebai/recruitment-radar",
+      "url": "https://github.com/zhouyuzhebai/recruitment-radar",
+      "stars": 6,
+      "last_pushed_at_utc": "2026-06-13T19:34:06Z",
+      "default_branch": "main",
+      "license_spdx_from_metadata": null,
+      "reviewed_files": [
+        {
+          "path": "app/crawler.py",
+          "url": "https://github.com/zhouyuzhebai/recruitment-radar/blob/main/app/crawler.py",
+          "blob_sha": "dfbe2675847e6d81b7e3db1d014cc8bb331bf1e6"
+        },
+        {
+          "path": "app/extract.py",
+          "url": "https://github.com/zhouyuzhebai/recruitment-radar/blob/main/app/extract.py",
+          "blob_sha": "3173ed348e965e7d8a3795d0c92222bca144cbee"
+        },
+        {
+          "path": "README.md",
+          "url": "https://github.com/zhouyuzhebai/recruitment-radar/blob/main/README.md",
+          "blob_sha": "b2c4b68def53b22823bb70e6d90e45663522712b"
+        }
+      ],
+      "latest_workflow_run": null
+    },
+    {
+      "repository": "Jasmine-Liu-min/job-radar",
+      "url": "https://github.com/Jasmine-Liu-min/job-radar",
+      "stars": 21,
+      "last_pushed_at_utc": "2026-10-22T01:21:03Z",
+      "default_branch": "main",
+      "license_spdx_from_metadata": null,
+      "reviewed_files": [
+        {
+          "path": "data/health_report.json",
+          "url": "https://github.com/Jasmine-Liu-min/job-radar/blob/main/data/health_report.json",
+          "blob_sha": "571319e5687e57130abfbb315b84cd9d9cac4d5b"
+        },
+        {
+          "path": "job_radar/adapters/gov_notice.py",
+          "url": "https://github.com/Jasmine-Liu-min/job-radar/blob/main/job_radar/adapters/gov_notice.py",
+          "blob_sha": "8905fe0bfd5d7d49d2972d998761d7e034d18284"
+        },
+        {
+          "path": "job_radar/models.py",
+          "url": "https://github.com/Jasmine-Liu-min/job-radar/blob/main/job_radar/models.py",
+          "blob_sha": "311328f9e15a335af0fec9ffa56d22c9f4105f2c"
+        },
+        {
+          "path": "job_radar/normalize.py",
+          "url": "https://github.com/Jasmine-Liu-min/job-radar/blob/main/job_radar/normalize.py",
+          "blob_sha": "5f334700740edbd55790920348c6f92706fefe42"
+        },
+        {
+          "path": "README.md",
+          "url": "https://github.com/Jasmine-Liu-min/job-radar/blob/main/README.md",
+          "blob_sha": "08887bf425a75da4eccf456ad6c76bb340dbbce8"
+        }
+      ],
+      "latest_workflow_run": [
+        {
+          "name": "job-radar-pages",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at_utc": "2026-10-22T01:21:08Z",
+          "event": "workflow_run",
+          "url": "https://github.com/Jasmine-Liu-min/job-radar/actions/runs/39705170629"
+        }
+      ]
+    },
+    {
+      "repository": "sgshome1/guoqi-jobs",
+      "url": "https://github.com/sgshome1/guoqi-jobs",
+      "stars": 0,
+      "last_pushed_at_utc": "2026-10-22T11:36:57Z",
+      "default_branch": "main",
+      "license_spdx_from_metadata": null,
+      "reviewed_files": [
+        {
+          "path": "data/meta.json",
+          "url": "https://github.com/sgshome1/guoqi-jobs/blob/main/data/meta.json",
+          "blob_sha": "5ba955054714c2ba1316471a0af981290f0202de"
+        },
+        {
+          "path": "data/notices/page1.json",
+          "url": "https://github.com/sgshome1/guoqi-jobs/blob/main/data/notices/page1.json",
+          "blob_sha": "8bae3c5c2680a9a5e72f74d4271d4b424d2f0d05"
+        }
+      ],
+      "latest_workflow_run": null
+    },
+    {
+      "repository": "jiabaobei/xiaozhao-radar",
+      "url": "https://github.com/jiabaobei/xiaozhao-radar",
+      "stars": 20,
+      "last_pushed_at_utc": "2026-09-03T12:36:01Z",
+      "default_branch": "main",
+      "license_spdx_from_metadata": "Apache-2.0",
+      "reviewed_files": [
+        {
+          "path": "sync_tencent_docs.py",
+          "url": "https://github.com/jiabaobei/xiaozhao-radar/blob/main/sync_tencent_docs.py",
+          "blob_sha": "46679636e8da1b2835120011fab419aba51165ff"
+        },
+        {
+          "path": "README.md",
+          "url": "https://github.com/jiabaobei/xiaozhao-radar/blob/main/README.md",
+          "blob_sha": "58c177449599a9acdb07239aa8bdd5117318a8f1"
+        }
+      ],
+      "latest_workflow_run": null
+    },
+    {
+      "repository": "Bynlk/JobHunter",
+      "url": "https://github.com/Bynlk/JobHunter",
+      "stars": 9,
+      "last_pushed_at_utc": "2026-05-07T13:25:29Z",
+      "default_branch": "main",
+      "license_spdx_from_metadata": "MIT",
+      "reviewed_files": [
+        {
+          "path": "LICENSE",
+          "url": "https://github.com/Bynlk/JobHunter/blob/main/LICENSE",
+          "blob_sha": "d69a77843b1456df9f80a52d1fee7fb5639e110d"
+        },
+        {
+          "path": "README.md",
+          "url": "https://github.com/Bynlk/JobHunter/blob/main/README.md",
+          "blob_sha": "63917d87b577062fe6c2d184b68ea5801210aa79"
+        }
+      ],
+      "latest_workflow_run": null
+    },
+    {
+      "repository": "Zwondar/job-scraper",
+      "url": "https://github.com/Zwondar/job-scraper",
+      "stars": 1,
+      "last_pushed_at_utc": "2026-09-19T08:31:34Z",
+      "default_branch": "main",
+      "license_spdx_from_metadata": null,
+      "reviewed_files": [
+        {
+          "path": "README.md",
+          "url": "https://github.com/Zwondar/job-scraper/blob/main/README.md",
+          "blob_sha": "9ea7203f0c11141c73bade55ba74d4bde73df354"
+        }
+      ],
+      "latest_workflow_run": null
+    },
+    {
+      "repository": "ruyi1/campus-radar",
+      "url": "https://github.com/ruyi1/campus-radar",
+      "stars": 12,
+      "last_pushed_at_utc": "2026-10-22T05:37:59Z",
+      "default_branch": "main",
+      "license_spdx_from_metadata": null,
+      "reviewed_files": [
+        {
+          "path": "README.md",
+          "url": "https://github.com/ruyi1/campus-radar/blob/main/README.md",
+          "blob_sha": "b2621788df3b069a492b0534a82cc491e5cd7464"
+        }
+      ],
+      "latest_workflow_run": [
+        {
+          "name": "秋招雷达日报",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at_utc": "2026-10-22T05:37:28Z",
+          "event": "schedule",
+          "url": "https://github.com/ruyi1/campus-radar/actions/runs/39729084393"
+        }
+      ]
+    },
+    {
+      "repository": "HA7CH/guoyang-pro",
+      "url": "https://github.com/HA7CH/guoyang-pro",
+      "stars": 7,
+      "last_pushed_at_utc": "2026-06-03T16:40:45Z",
+      "default_branch": "master",
+      "license_spdx_from_metadata": null,
+      "reviewed_files": [
+        {
+          "path": "README.md",
+          "url": "https://github.com/HA7CH/guoyang-pro/blob/master/README.md",
+          "blob_sha": "f8dfe153fc710fe10997c253c130dfbb584ac1a8"
+        },
+        {
+          "path": "cli/data/calendar/calendar.json",
+          "url": "https://github.com/HA7CH/guoyang-pro/blob/master/cli/data/calendar/calendar.json",
+          "blob_sha": "20238dc27c474fed60b42d40dffde62a3c722852"
+        },
+        {
+          "path": "cli/src/adapters/iguopin.ts",
+          "url": "https://github.com/HA7CH/guoyang-pro/blob/master/cli/src/adapters/iguopin.ts",
+          "blob_sha": "2b973bb9622d2ced98ccc642efe79e97dcd9e26e"
+        }
+      ],
+      "latest_workflow_run": null
+    },
+    {
+      "repository": "z-GitHub-l/recruitment-bot",
+      "url": "https://github.com/z-GitHub-l/recruitment-bot",
+      "stars": null,
+      "last_pushed_at_utc": null,
+      "default_branch": null,
+      "license_spdx_from_metadata": null,
+      "reviewed_files": [
+        {
+          "path": "README.md",
+          "url": "https://github.com/z-GitHub-l/recruitment-bot/blob/main/README.md",
+          "blob_sha": null
+        }
+      ],
+      "latest_workflow_run": null
+    }
+  ],
+  "official_sources": [
+    {
+      "title": "财政部履行出资人职责的中央企业名录",
+      "url": "https://zcgls.mof.gov.cn/zhuantilanmu/czblz/202108/t20210817_3745862.htm"
+    },
+    {
+      "title": "国资委央企名录入口（本次直读超时，不用于断言企业数量）",
+      "url": "https://wap.sasac.gov.cn/n2588045/n27271785/n27271792/index.html"
+    },
+    {
+      "title": "国资委监管企业产权信息查询平台说明",
+      "url": "https://wap.sasac.gov.cn/n2588030/n2588944/c26506339/content.html"
+    },
+    {
+      "title": "国家能源集团2027届统招公告",
+      "url": "https://zhaopin.chnenergy.com.cn/annc/showgg?id=6a152f40-7fe5-460e-ad37-0024acafd8c9"
+    },
+    {
+      "title": "中国银行2027全球校园招聘公告",
+      "url": "https://www.boc.cn/aboutboc/bi4/202609/t20260903_25689311.html"
+    },
+    {
+      "title": "中铝部分岗位延期公告（内部招聘，仅用于建模研究）",
+      "url": "https://zlwebsite.chinalco.com.cn/pub/zljt/xwzx/xwzx_gsgg/202608/t20260806_175052.html"
+    }
+  ],
+  "synthetic_reproductions": [
+    {
+      "implementation": "Jasmine-Liu-min/job-radar/job_radar/adapters/gov_notice.py",
+      "input": "报名时间：2026年9月1日至2026年10月31日。",
+      "observed": "2026-09-01",
+      "expected": "2026-10-31"
+    },
+    {
+      "implementation": "Jasmine-Liu-min/job-radar/job_radar/adapters/gov_notice.py",
+      "input": "网申截止另行通知。毕业时间须不晚于2027年7月31日。",
+      "observed": "2027-07-31",
+      "expected": "unknown; graduation deadline stored separately"
+    }
+  ]
+}

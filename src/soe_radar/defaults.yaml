@@ -1,0 +1,126 @@
+timezone: Asia/Shanghai
+data_dir: data
+schedule_hours: 6
+source_pages: 5
+details_per_source: 50
+request_delay: 1.0
+http_timeout: 25
+# 仅在已知可信的本机代理使用 198.18.0.0/15 Fake-IP DNS 时启用。
+allow_fake_ip_dns: false
+browser_enabled: false
+browser_channel: null
+jina_enabled: false
+tavily_enabled: false
+tavily_daily_limit: 20
+llm:
+  allow_paid: false
+  monthly_budget_usd: 0
+  daily_calls: 100
+  max_attempts: 3
+  timeout: 90
+  max_output_tokens: 3000
+  providers:
+    - name: opencode
+      protocol: chat_completions
+      enabled: true
+      base_url: https://opencode.ai/inference/openai/v1
+      models: [glm-5.3-flash-free, deepseek-v4.1-flash-free]
+      free_models: [glm-5.3-flash-free, deepseek-v4.1-flash-free]
+      api_key_env: OPENCODE_API_KEY
+      key_required: true
+      billing: free
+      input_usd_per_million: 0
+      output_usd_per_million: 0
+    - name: codex-local
+      protocol: codex_cli
+      enabled: false
+      models: [gpt-6-luna]
+      billing: subscription
+      key_required: false
+    - name: openai
+      protocol: responses
+      enabled: false
+      base_url: https://api.openai.com/v1
+      models: [gpt-6-luna]
+      billing: paid
+      api_key_env: OPENAI_API_KEY
+      key_required: true
+      # 未填写价格时禁止发出付费请求。启用前自行核实供应商单价。
+      input_usd_per_million: 0
+      output_usd_per_million: 0
+sources:
+  - id: boc
+    name: 中国银行
+    employer: 中国银行股份有限公司
+    aliases: [中国银行, 中行]
+    url: https://www.boc.cn/aboutboc/bi4/
+    domains: [boc.cn, bankofchina.com, campus.chinahr.com]
+    industry: 金融
+  - id: chnenergy
+    name: 国家能源集团
+    employer: 国家能源投资集团有限责任公司
+    aliases: [国家能源集团, 国家能源投资集团]
+    url: https://zhaopin.chnenergy.com.cn/index1
+    domains: [chnenergy.com.cn]
+    industry: 能源电力
+  - id: sh-sasac
+    name: 上海国资委
+    url: https://www.gzw.sh.gov.cn/shgzw_xxgk_cqzp/index.html
+    domains: [gzw.sh.gov.cn]
+    policy: government_soe
+  - id: sasac
+    name: 国务院国资委
+    url: https://wap.sasac.gov.cn/n2588035/n2588325/n2588350/index.html
+    domains: [sasac.gov.cn]
+    policy: registry_required
+  - id: ncss
+    name: 国家大学生就业服务平台
+    url: https://www.ncss.cn/student/jobs/jobslist/ajax/?offset=1&limit=20&recruitType=1
+    domains: [ncss.cn]
+    policy: registry_required
+    adapter: json
+    api_items_path: data.list
+    api_fields: {title: jobName, url: jobId, company: recName}
+    api_url_template: https://www.ncss.cn/student/jobs/{id}/detail.html
+    api_next_param: offset
+    api_required_fields: {recProperty: 国有企业}
+  - id: cmcc
+    name: 中国移动
+    employer: 中国移动通信集团有限公司
+    aliases: [中国移动, 中移]
+    url: https://job.10086.cn/index.html
+    domains: [10086.cn, chinamobile.com]
+    industry: 通信
+    browser: true
+  - id: telecom
+    name: 中国电信
+    employer: 中国电信集团有限公司
+    aliases: [中国电信]
+    url: https://job.chinatelecom.com.cn/wt/TELE/web/index
+    fallback_urls: [https://www.chinatelecom.com.cn/index.html]
+    domains: [chinatelecom.com.cn]
+    industry: 通信
+    browser: true
+  - id: unicom
+    name: 中国联通
+    employer: 中国联合网络通信集团有限公司
+    aliases: [中国联通, 中国联合网络通信]
+    url: https://www.chinaunicom.com.cn/46/menu01/528/column06
+    domains: [chinaunicom.com.cn, chinaunicom.cn]
+    industry: 通信
+  - id: cnpc
+    name: 中国石油
+    employer: 中国石油天然气集团有限公司
+    aliases: [中国石油, 中石油]
+    url: https://zhaopin.cnpc.com.cn/
+    domains: [cnpc.com.cn]
+    industry: 石油化工
+    browser: true
+  - id: sinopec
+    name: 中国石化
+    employer: 中国石油化工集团有限公司
+    aliases: [中国石化, 中石化]
+    url: https://job.sinopec.com/
+    domains: [sinopec.com, sinopecgroup.com]
+    industry: 石油化工
+    browser: true
