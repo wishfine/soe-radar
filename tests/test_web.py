@@ -50,11 +50,14 @@ def test_coverage_gaps_are_visible_and_national_denominator_is_unknown(client):
     assert result["national_coverage_rate"] is None
     assert len(result["registries"]) >= 35
     assert len([r for r in result["registries"] if r["category"] == "local"]) == 31
-    assert all(r["count"] is None for r in result["registries"])
+    assert result["summary"]["registry_entities"] >= 200
+    assert all(r["last_success"] is None for r in result["registries"])
     assert all(r["status"] == "missing_entry" for r in result["items"])
     assert client.post("/api/registries/central-sasac/refresh").status_code == 403
     assert client.get("/exports/coverage.csv").status_code == 200
     assert "企业名称" in client.get("/exports/coverage.csv").text
+    assert "名录页面日期" in client.get("/exports/coverage.csv").text
+    assert "2021-02-20" in client.get("/exports/coverage.csv").text
 
 
 def test_coverage_pagination_and_cohort_count_exclude_past_announcements(client):
@@ -69,7 +72,7 @@ def test_coverage_pagination_and_cohort_count_exclude_past_announcements(client)
 def test_registry_csv_import_requires_local_auth_and_explicit_provenance(client):
     url = "/api/registries/local-01/imports"
     files = {"file": ("registry.csv", "企业名称\n合成示例企业有限公司\n".encode(), "text/csv")}
-    data = {"proof_url": "https://example.gov.cn/enterprises"}
+    data = {"proof_url": "https://gzw.beijing.gov.cn/enterprises"}
     assert client.post(url, files=files, data=data).status_code == 403
     assert client.post(url, files=files, data=data, headers=auth(client)).status_code == 422
     data["confirmed"] = "on"
@@ -82,7 +85,7 @@ def test_registry_csv_import_requires_local_auth_and_explicit_provenance(client)
     registry = next(r for r in result["registries"] if r["id"] == "local-01")
     assert registry["status"] == "imported"
     assert registry["url"] == data["proof_url"]
-    assert not registry["refreshable"]
+    assert registry["refreshable"]
 
 
 def test_filters_and_personal_state_persist(client):

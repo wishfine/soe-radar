@@ -59,6 +59,12 @@ class RegistryConfig(BaseModel):
     domains: list[str] = Field(default_factory=list)
     name_columns: list[int] = Field(default_factory=lambda: [1])
     min_entries: int = Field(default=1, ge=1)
+    adapter: Literal["table", "links", "numbered"] = "table"
+    entry_selector: str = ""
+    scope: str = "未确认名单范围"
+    authority_url: str = ""
+    authority_proof_url: str = ""
+    exclude_names: list[str] = Field(default_factory=list)
     network_mode: Literal["", "env", "direct", "proxy", "auto"] = ""
 
     @model_validator(mode="after")
@@ -84,6 +90,7 @@ class Settings(BaseModel):
     proxy_env: str = "SOE_RADAR_HTTP_PROXY"
     coverage_fresh_hours: int = Field(default=48, ge=1)
     registries: list[RegistryConfig] = Field(default_factory=list)
+    bundled_catalogue: bool = True
     allow_fake_ip_dns: bool = False
     browser_enabled: bool = False
     browser_channel: str | None = None

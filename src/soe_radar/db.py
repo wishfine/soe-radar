@@ -99,6 +99,9 @@ def seed(s: Session, cfg: Settings):
             if not parent or parent.id == employer.id:
                 raise ValueError(f"企业名录的上级主体不存在或引用自身：{entry.name}")
             employer.parent_id = parent.id
+    from .catalogue import seed_catalogue
+
+    seed_catalogue(s, cfg)
 
 
 def initialize(cfg: Settings) -> Database:

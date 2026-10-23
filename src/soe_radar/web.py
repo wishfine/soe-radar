@@ -507,6 +507,10 @@ def create_app(cfg: Settings | None = None, *, scheduling=True):
                 "当届校招",
                 "待补证活动",
                 "性质依据",
+                "性质已核验",
+                "名录范围",
+                "名录页面日期",
+                "官网域名线索（未监测）",
             ]
         )
         for row in report["items"]:
@@ -523,6 +527,10 @@ def create_app(cfg: Settings | None = None, *, scheduling=True):
                         row["campus_count"],
                         row["pending_count"],
                         row["proof_url"],
+                        row["ownership_verified"],
+                        [x["provenance"].get("scope", "") for x in row["registry_evidence"]],
+                        [x["provenance"].get("published_at") or "未标明" for x in row["registry_evidence"]],
+                        [x["declared_domain"] for x in row["registry_evidence"] if x["declared_domain"]],
                     ]
                 ]
             )

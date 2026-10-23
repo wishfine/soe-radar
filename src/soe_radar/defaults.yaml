@@ -9,6 +9,8 @@ http_timeout: 25
 network_mode: env
 proxy_env: SOE_RADAR_HTTP_PROXY
 coverage_fresh_hours: 48
+# 索引摘录不设置实时核验成功时间，也不自动认证企业性质。
+bundled_catalogue: true
 # 仅在已知可信的本机代理使用 198.18.0.0/15 Fake-IP DNS 时启用。
 allow_fake_ip_dns: false
 browser_enabled: false
@@ -163,111 +165,177 @@ registries:
     domains: [mof.gov.cn]
     min_entries: 50
   - id: central-finance
-    name: 中央金融企业（官方旧入口需重新核对）
+    name: 中央金融企业（历史名单待复核）
     category: central_finance
   - id: central-other
     name: 其他中央主管企业与所属单位
     category: central_other
   - id: local-01
-    name: 北京地方国企（名录待接入）
+    name: 北京地方国企（官方目录摘录）
     category: local
     region: 北京
+    url: https://gzw.beijing.gov.cn/yggq/jgqy/index.html
+    domains: [gzw.beijing.gov.cn]
+    scope: 北京市监管企业目录首屏可见条目，不含全部分页、区县与所属单位
+    adapter: links
+    entry_selector: a
+    min_entries: 10
+    authority_url: https://gzw.beijing.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-02
     name: 天津地方国企（名录待接入）
     category: local
     region: 天津
+    authority_url: https://sasac.tj.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-03
     name: 河北地方国企（名录待接入）
     category: local
     region: 河北
+    authority_url: https://hbsa.hebei.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-04
     name: 山西地方国企（名录待接入）
     category: local
     region: 山西
+    authority_url: https://gzw.shanxi.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-05
     name: 内蒙古地方国企（名录待接入）
     category: local
     region: 内蒙古
+    authority_url: https://gzw.nmg.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-06
     name: 辽宁地方国企（名录待接入）
     category: local
     region: 辽宁
+    authority_url: https://gzw.ln.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-07
     name: 吉林地方国企（名录待接入）
     category: local
     region: 吉林
+    authority_url: https://gzw.jl.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-08
     name: 黑龙江地方国企（名录待接入）
     category: local
     region: 黑龙江
+    authority_url: https://gzw.hlj.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-09
     name: 上海地方国企（名录待接入）
     category: local
     region: 上海
+    authority_url: https://www.gzw.sh.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-10
     name: 江苏地方国企（名录待接入）
     category: local
     region: 江苏
+    authority_url: https://jsgzw.jiangsu.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-11
     name: 浙江地方国企（名录待接入）
     category: local
     region: 浙江
+    authority_url: https://gzw.zj.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-12
     name: 安徽地方国企（名录待接入）
     category: local
     region: 安徽
   - id: local-13
-    name: 福建地方国企（名录待接入）
+    name: 福建地方国企（官方目录摘录）
     category: local
     region: 福建
+    url: https://gzw.fujian.gov.cn/wzdh/ssqy/
+    domains: [gzw.fujian.gov.cn]
+    scope: 福建省属企业友情链接可见条目，不含地市、区县与所属单位
+    adapter: links
+    entry_selector: a
+    min_entries: 10
+    authority_url: https://gzw.fujian.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-14
     name: 江西地方国企（名录待接入）
     category: local
     region: 江西
+    authority_url: https://gzw.jiangxi.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-15
     name: 山东地方国企（名录待接入）
     category: local
     region: 山东
+    authority_url: https://gzw.shandong.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-16
     name: 河南地方国企（名录待接入）
     category: local
     region: 河南
+    authority_url: https://gzw.henan.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-17
     name: 湖北地方国企（名录待接入）
     category: local
     region: 湖北
+    authority_url: https://gzw.hubei.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-18
-    name: 湖南地方国企（名录待接入）
+    name: 湖南地方国企（官方目录摘录）
     category: local
     region: 湖南
+    url: https://gzw.hunan.gov.cn/gzw/xxgk_71571/ssqyml/201803/t20180327_4980103.html
+    domains: [gzw.hunan.gov.cn]
+    scope: 湖南省直接及委托监管企业；不含第一大股东企业、地市与所属单位
+    name_columns: [1, 3]
+    exclude_names: [中联重科股份有限公司]
+    min_entries: 15
+    authority_url: https://gzw.hunan.gov.cn/
+    authority_proof_url: https://gzw.hunan.gov.cn/gzw/xxgk_71571/ssqyml/201803/t20180327_4980103.html
   - id: local-19
     name: 广东地方国企（名录待接入）
     category: local
     region: 广东
+    authority_url: https://gzw.gd.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-20
     name: 广西地方国企（名录待接入）
     category: local
     region: 广西
+    authority_url: https://gzw.gxzf.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-21
     name: 海南地方国企（名录待接入）
     category: local
     region: 海南
+    authority_url: https://gzw.hainan.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-22
     name: 重庆地方国企（名录待接入）
     category: local
     region: 重庆
+    authority_url: https://gzw.cq.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-23
     name: 四川地方国企（名录待接入）
     category: local
     region: 四川
+    authority_url: https://gzw.sc.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-24
     name: 贵州地方国企（名录待接入）
     category: local
     region: 贵州
+    authority_url: https://gzw.guizhou.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-25
     name: 云南地方国企（名录待接入）
     category: local
     region: 云南
+    authority_url: https://gzw.yn.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-26
     name: 西藏地方国企（名录待接入）
     category: local
@@ -276,10 +344,14 @@ registries:
     name: 陕西地方国企（名录待接入）
     category: local
     region: 陕西
+    authority_url: https://sxgz.shaanxi.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-28
     name: 甘肃地方国企（名录待接入）
     category: local
     region: 甘肃
+    authority_url: https://gzw.gansu.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-29
     name: 青海地方国企（名录待接入）
     category: local
@@ -288,7 +360,28 @@ registries:
     name: 宁夏地方国企（名录待接入）
     category: local
     region: 宁夏
+    authority_url: https://gzw.nx.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-31
-    name: 新疆地方国企（名录待接入）
+    name: 新疆地方国企（官方目录摘录）
     category: local
     region: 新疆
+    url: https://gzw.xinjiang.gov.cn/gzw/
+    domains: [gzw.xinjiang.gov.cn]
+    scope: 新疆自治区国资委首页监管企业可见条目，不含兵团、地州及所属单位
+    adapter: links
+    entry_selector: a
+    min_entries: 10
+    authority_url: https://gzw.xinjiang.gov.cn/
+    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
+
+  - id: local-guangzhou
+    name: 广州市直接监管企业
+    category: local_city
+    region: 广东
+    url: https://gzw.gz.gov.cn/qy/zjjgqyml/content/post_10630755.html
+    domains: [gzw.gz.gov.cn]
+    adapter: links
+    entry_selector: a
+    min_entries: 20
+    scope: 广州市国资委直接监管企业，不代表广东全省或所属单位

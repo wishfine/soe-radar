@@ -1,0 +1,1147 @@
+{
+  "schema_version": 1,
+  "bundles": [
+    {
+      "registry_id": "central-sasac",
+      "source_url": "https://wap.sasac.gov.cn/n2588045/n27271785/n27271792/c14159097/content.html",
+      "provenance": {
+        "acquisition": "official_index_excerpt",
+        "retrieved_at": "2026-10-23",
+        "published_at": "2026-07-11",
+        "scope": "国务院国资委监管企业集团层级，不含所属单位",
+        "complete": false,
+        "note": "官方索引历史页面摘录；不代表当前完整名单，新增及重组需复核。"
+      },
+      "entries": [
+        {
+          "rank": 1,
+          "name": "中国核工业集团有限公司"
+        },
+        {
+          "rank": 2,
+          "name": "中国航天科技集团有限公司"
+        },
+        {
+          "rank": 3,
+          "name": "中国航天科工集团有限公司"
+        },
+        {
+          "rank": 4,
+          "name": "中国航空工业集团有限公司"
+        },
+        {
+          "rank": 5,
+          "name": "中国船舶集团有限公司"
+        },
+        {
+          "rank": 6,
+          "name": "中国兵器工业集团有限公司"
+        },
+        {
+          "rank": 7,
+          "name": "中国兵器装备集团有限公司"
+        },
+        {
+          "rank": 8,
+          "name": "中国电子科技集团有限公司"
+        },
+        {
+          "rank": 9,
+          "name": "中国航空发动机集团有限公司"
+        },
+        {
+          "rank": 10,
+          "name": "中国融通资产管理集团有限公司"
+        },
+        {
+          "rank": 11,
+          "name": "中国石油天然气集团有限公司"
+        },
+        {
+          "rank": 12,
+          "name": "中国石油化工集团有限公司"
+        },
+        {
+          "rank": 13,
+          "name": "中国海洋石油集团有限公司"
+        },
+        {
+          "rank": 14,
+          "name": "国家石油天然气管网集团有限公司"
+        },
+        {
+          "rank": 15,
+          "name": "国家电网有限公司"
+        },
+        {
+          "rank": 16,
+          "name": "中国南方电网有限责任公司"
+        },
+        {
+          "rank": 17,
+          "name": "中国华能集团有限公司"
+        },
+        {
+          "rank": 18,
+          "name": "中国大唐集团有限公司"
+        },
+        {
+          "rank": 19,
+          "name": "中国华电集团有限公司"
+        },
+        {
+          "rank": 20,
+          "name": "国家电力投资集团有限公司"
+        },
+        {
+          "rank": 21,
+          "name": "中国长江三峡集团有限公司"
+        },
+        {
+          "rank": 22,
+          "name": "中国雅江集团有限公司"
+        },
+        {
+          "rank": 23,
+          "name": "国家能源投资集团有限责任公司"
+        },
+        {
+          "rank": 24,
+          "name": "中国电信集团有限公司"
+        },
+        {
+          "rank": 25,
+          "name": "中国联合网络通信集团有限公司"
+        },
+        {
+          "rank": 26,
+          "name": "中国移动通信集团有限公司"
+        },
+        {
+          "rank": 27,
+          "name": "中国卫星网络集团有限公司"
+        },
+        {
+          "rank": 28,
+          "name": "中国电子信息产业集团有限公司"
+        },
+        {
+          "rank": 29,
+          "name": "中国第一汽车集团有限公司"
+        },
+        {
+          "rank": 30,
+          "name": "东风汽车集团有限公司"
+        },
+        {
+          "rank": 31,
+          "name": "中国一重集团有限公司"
+        },
+        {
+          "rank": 32,
+          "name": "中国机械工业集团有限公司"
+        },
+        {
+          "rank": 33,
+          "name": "哈尔滨电气集团有限公司"
+        },
+        {
+          "rank": 34,
+          "name": "中国东方电气集团有限公司"
+        },
+        {
+          "rank": 35,
+          "name": "鞍钢集团有限公司"
+        },
+        {
+          "rank": 36,
+          "name": "中国宝武钢铁集团有限公司"
+        },
+        {
+          "rank": 37,
+          "name": "中国矿产资源集团有限公司"
+        },
+        {
+          "rank": 38,
+          "name": "中国铝业集团有限公司"
+        },
+        {
+          "rank": 39,
+          "name": "中国远洋海运集团有限公司"
+        },
+        {
+          "rank": 40,
+          "name": "中国航空集团有限公司"
+        },
+        {
+          "rank": 41,
+          "name": "中国东方航空集团有限公司"
+        },
+        {
+          "rank": 42,
+          "name": "中国南方航空集团有限公司"
+        },
+        {
+          "rank": 43,
+          "name": "中国中化控股有限责任公司"
+        },
+        {
+          "rank": 44,
+          "name": "中粮集团有限公司"
+        },
+        {
+          "rank": 45,
+          "name": "中国五矿集团有限公司"
+        },
+        {
+          "rank": 46,
+          "name": "中国通用技术（集团）控股有限责任公司"
+        },
+        {
+          "rank": 47,
+          "name": "中国建筑集团有限公司"
+        },
+        {
+          "rank": 48,
+          "name": "中国储备粮管理集团有限公司"
+        },
+        {
+          "rank": 49,
+          "name": "中国南水北调集团有限公司"
+        },
+        {
+          "rank": 50,
+          "name": "国家开发投资集团有限公司"
+        },
+        {
+          "rank": 51,
+          "name": "招商局集团有限公司"
+        },
+        {
+          "rank": 52,
+          "name": "华润（集团）有限公司"
+        },
+        {
+          "rank": 53,
+          "name": "中国旅游集团有限公司",
+          "aliases": [
+            "香港中旅（集团）有限公司"
+          ]
+        },
+        {
+          "rank": 54,
+          "name": "中国商用飞机有限责任公司"
+        },
+        {
+          "rank": 55,
+          "name": "中国节能环保集团有限公司"
+        },
+        {
+          "rank": 56,
+          "name": "中国国际工程咨询有限公司"
+        },
+        {
+          "rank": 57,
+          "name": "中国诚通控股集团有限公司"
+        },
+        {
+          "rank": 58,
+          "name": "中国中煤能源集团有限公司"
+        },
+        {
+          "rank": 59,
+          "name": "中国煤炭科工集团有限公司"
+        },
+        {
+          "rank": 60,
+          "name": "中国机械科学研究总院集团有限公司"
+        },
+        {
+          "rank": 61,
+          "name": "中国钢研科技集团有限公司"
+        },
+        {
+          "rank": 62,
+          "name": "中国化学工程集团有限公司"
+        },
+        {
+          "rank": 63,
+          "name": "中国盐业集团有限公司"
+        },
+        {
+          "rank": 64,
+          "name": "中国建材集团有限公司"
+        },
+        {
+          "rank": 65,
+          "name": "中国有色矿业集团有限公司"
+        },
+        {
+          "rank": 66,
+          "name": "中国稀土集团有限公司"
+        },
+        {
+          "rank": 67,
+          "name": "中国资源循环集团有限公司"
+        },
+        {
+          "rank": 68,
+          "name": "中国有研科技集团有限公司"
+        },
+        {
+          "rank": 69,
+          "name": "矿冶科技集团有限公司"
+        },
+        {
+          "rank": 70,
+          "name": "中国国际技术智力合作集团有限公司"
+        },
+        {
+          "rank": 71,
+          "name": "中国建筑科学研究院有限公司"
+        },
+        {
+          "rank": 72,
+          "name": "中国中车集团有限公司"
+        },
+        {
+          "rank": 73,
+          "name": "中国长安汽车集团有限公司"
+        },
+        {
+          "rank": 74,
+          "name": "中国铁路通信信号集团有限公司"
+        },
+        {
+          "rank": 75,
+          "name": "中国铁路工程集团有限公司"
+        },
+        {
+          "rank": 76,
+          "name": "中国铁道建筑集团有限公司"
+        },
+        {
+          "rank": 77,
+          "name": "中国交通建设集团有限公司"
+        },
+        {
+          "rank": 78,
+          "name": "中国信息通信科技集团有限公司"
+        },
+        {
+          "rank": 79,
+          "name": "中国农业发展集团有限公司"
+        },
+        {
+          "rank": 80,
+          "name": "中国林业集团有限公司"
+        },
+        {
+          "rank": 81,
+          "name": "中国医药集团有限公司"
+        },
+        {
+          "rank": 82,
+          "name": "中国保利集团有限公司"
+        },
+        {
+          "rank": 83,
+          "name": "中国建设科技有限公司"
+        },
+        {
+          "rank": 84,
+          "name": "中国冶金地质总局"
+        },
+        {
+          "rank": 85,
+          "name": "中国煤炭地质总局"
+        },
+        {
+          "rank": 86,
+          "name": "新兴际华集团有限公司"
+        },
+        {
+          "rank": 87,
+          "name": "中国民航信息集团有限公司"
+        },
+        {
+          "rank": 88,
+          "name": "中国航空器材集团有限公司"
+        },
+        {
+          "rank": 89,
+          "name": "中国电力建设集团有限公司"
+        },
+        {
+          "rank": 90,
+          "name": "中国能源建设集团有限公司"
+        },
+        {
+          "rank": 91,
+          "name": "中国安能建设集团有限公司"
+        },
+        {
+          "rank": 92,
+          "name": "中国黄金集团有限公司"
+        },
+        {
+          "rank": 93,
+          "name": "中国广核集团有限公司"
+        },
+        {
+          "rank": 94,
+          "name": "华侨城集团有限公司"
+        },
+        {
+          "rank": 95,
+          "name": "南光（集团）有限公司",
+          "aliases": [
+            "中国南光集团有限公司"
+          ]
+        },
+        {
+          "rank": 96,
+          "name": "中国电气装备集团有限公司"
+        },
+        {
+          "rank": 97,
+          "name": "中国物流集团有限公司"
+        },
+        {
+          "rank": 98,
+          "name": "中国国新控股有限责任公司"
+        },
+        {
+          "rank": 99,
+          "name": "中国检验认证（集团）有限公司"
+        }
+      ]
+    },
+    {
+      "registry_id": "central-finance",
+      "source_url": "https://czt.jiangsu.gov.cn/art/2021/2/20/art_8065_9676553.html",
+      "provenance": {
+        "acquisition": "official_index_excerpt",
+        "retrieved_at": "2026-10-23",
+        "published_at": "2021-02-20",
+        "scope": "财政部中央金融企业名录的江苏财政厅转载，不含子公司",
+        "complete": false,
+        "note": "历史名单，企业名称及国有性质需按现行资料复核；不据此自动发布招聘。"
+      },
+      "entries": [
+        {
+          "rank": 1,
+          "name": "中国农业发展银行"
+        },
+        {
+          "rank": 2,
+          "name": "中国进出口银行"
+        },
+        {
+          "rank": 3,
+          "name": "国家开发银行"
+        },
+        {
+          "rank": 4,
+          "name": "中国工商银行股份有限公司"
+        },
+        {
+          "rank": 5,
+          "name": "中国农业银行股份有限公司"
+        },
+        {
+          "rank": 6,
+          "name": "中国银行股份有限公司"
+        },
+        {
+          "rank": 7,
+          "name": "中国建设银行股份有限公司"
+        },
+        {
+          "rank": 8,
+          "name": "交通银行股份有限公司"
+        },
+        {
+          "rank": 9,
+          "name": "中国出口信用保险公司"
+        },
+        {
+          "rank": 10,
+          "name": "中国人民保险集团股份有限公司"
+        },
+        {
+          "rank": 11,
+          "name": "中国人寿保险（集团）公司"
+        },
+        {
+          "rank": 12,
+          "name": "中国太平保险集团有限责任公司"
+        },
+        {
+          "rank": 13,
+          "name": "中国中信集团有限公司"
+        },
+        {
+          "rank": 14,
+          "name": "中国光大集团股份公司"
+        },
+        {
+          "rank": 15,
+          "name": "中国投资有限责任公司"
+        },
+        {
+          "rank": 16,
+          "name": "中国华融资产管理股份有限公司"
+        },
+        {
+          "rank": 17,
+          "name": "中国长城资产管理股份有限公司"
+        },
+        {
+          "rank": 18,
+          "name": "中国东方资产管理股份有限公司"
+        },
+        {
+          "rank": 19,
+          "name": "中国信达资产管理股份有限公司"
+        },
+        {
+          "rank": 20,
+          "name": "中央国债登记结算有限责任公司"
+        },
+        {
+          "rank": 21,
+          "name": "中国农业再保险股份有限公司"
+        },
+        {
+          "rank": 22,
+          "name": "中国政企合作投资基金股份有限公司"
+        },
+        {
+          "rank": 23,
+          "name": "国家融资担保基金有限责任公司"
+        },
+        {
+          "rank": 24,
+          "name": "中国银河金融控股有限责任公司"
+        },
+        {
+          "rank": 25,
+          "name": "中国建银投资有限责任公司"
+        },
+        {
+          "rank": 26,
+          "name": "中国再保险（集团）股份有限公司"
+        }
+      ]
+    },
+    {
+      "registry_id": "local-01",
+      "source_url": "https://gzw.beijing.gov.cn/yggq/jgqy/index.html",
+      "provenance": {
+        "acquisition": "official_index_excerpt",
+        "retrieved_at": "2026-10-23",
+        "published_at": null,
+        "scope": "北京市监管企业目录首屏可见条目，不含全部分页、区县与所属单位",
+        "complete": false,
+        "note": "通过官方页面索引整理；本机尚未直连复核。所列官网域名仅作线索，不作为已监测招聘入口。"
+      },
+      "entries": [
+        {
+          "rank": 1,
+          "name": "首钢集团有限公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 2,
+          "name": "北京公共交通控股（集团）有限公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 3,
+          "name": "北京市基础设施投资有限公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 4,
+          "name": "北京市地铁运营有限公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 5,
+          "name": "北京控股集团有限公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 6,
+          "name": "北京能源集团有限责任公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 7,
+          "name": "北京首都创业集团有限公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 8,
+          "name": "北京市国有资产经营有限责任公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 9,
+          "name": "北京市自来水集团有限责任公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 10,
+          "name": "北京银行股份有限公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 11,
+          "name": "华夏银行股份有限公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 12,
+          "name": "北京金融控股集团有限公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 13,
+          "name": "北京农村商业银行股份有限公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 14,
+          "name": "北京电子控股有限责任公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 15,
+          "name": "北京汽车集团有限公司",
+          "declared_domain": "",
+          "official_url": ""
+        }
+      ]
+    },
+    {
+      "registry_id": "local-13",
+      "source_url": "https://gzw.fujian.gov.cn/wzdh/ssqy/",
+      "provenance": {
+        "acquisition": "official_index_excerpt",
+        "retrieved_at": "2026-10-23",
+        "published_at": null,
+        "scope": "福建省属企业友情链接可见条目，不含地市、区县与所属单位",
+        "complete": false,
+        "note": "通过官方页面索引整理；本机尚未直连复核。所列官网域名仅作线索，不作为已监测招聘入口。"
+      },
+      "entries": [
+        {
+          "rank": 1,
+          "name": "福建省高速公路集团有限公司",
+          "declared_domain": "www.fjgsgl.com",
+          "official_url": ""
+        },
+        {
+          "rank": 2,
+          "name": "福建省投资开发集团有限责任公司",
+          "declared_domain": "www.fidc.com.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 3,
+          "name": "福建省工业控股集团有限公司",
+          "declared_domain": "www.fjyjkg.com",
+          "official_url": ""
+        },
+        {
+          "rank": 4,
+          "name": "福建省能源石化集团有限责任公司",
+          "declared_domain": "www.fjnhjt.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 5,
+          "name": "福建省港口集团有限责任公司",
+          "declared_domain": "www.fjpg.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 6,
+          "name": "福建省汽车工业集团有限公司",
+          "declared_domain": "www.fjmotor.com.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 7,
+          "name": "福建省电子信息（集团）有限责任公司",
+          "declared_domain": "www.feig.com.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 8,
+          "name": "福建省船舶工业集团公司",
+          "declared_domain": "www.fsigc.com",
+          "official_url": ""
+        },
+        {
+          "rank": 9,
+          "name": "福建省建设投资集团有限责任公司",
+          "declared_domain": "www.fjjtjt.com.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 10,
+          "name": "福建省旅游发展集团有限公司",
+          "declared_domain": "www.fjlygroup.com",
+          "official_url": ""
+        },
+        {
+          "rank": 11,
+          "name": "中国（福建）对外贸易中心集团有限责任公司",
+          "declared_domain": "www.fftcc.com",
+          "official_url": ""
+        },
+        {
+          "rank": 12,
+          "name": "福建省招标采购集团有限公司",
+          "declared_domain": "www.fujianbid.com",
+          "official_url": ""
+        },
+        {
+          "rank": 13,
+          "name": "福建省水利投资开发集团有限公司",
+          "declared_domain": "www.fjstjt.com",
+          "official_url": ""
+        },
+        {
+          "rank": 14,
+          "name": "福建省大数据集团有限公司",
+          "declared_domain": "www.fjbdg.com.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 15,
+          "name": "福建省国有资产管理有限公司",
+          "declared_domain": "www.fjsgzgs.com",
+          "official_url": ""
+        },
+        {
+          "rank": 16,
+          "name": "福建省医药集团有限责任公司",
+          "declared_domain": "www.fjyyjt.com",
+          "official_url": ""
+        }
+      ]
+    },
+    {
+      "registry_id": "local-31",
+      "source_url": "https://gzw.xinjiang.gov.cn/gzw/",
+      "provenance": {
+        "acquisition": "official_index_excerpt",
+        "retrieved_at": "2026-10-23",
+        "published_at": null,
+        "scope": "新疆自治区国资委首页监管企业可见条目，不含兵团、地州及所属单位",
+        "complete": false,
+        "note": "通过官方页面索引整理；本机尚未直连复核。所列官网域名仅作线索，不作为已监测招聘入口。"
+      },
+      "entries": [
+        {
+          "rank": 1,
+          "name": "新疆有色金属工业（集团）有限责任公司",
+          "declared_domain": "www.xjysjs.com",
+          "official_url": ""
+        },
+        {
+          "rank": 2,
+          "name": "新疆机场（集团）有限责任公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 3,
+          "name": "新疆能源（集团）有限责任公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 4,
+          "name": "新疆中泰（集团）有限责任公司",
+          "declared_domain": "www.zthx.com",
+          "official_url": ""
+        },
+        {
+          "rank": 5,
+          "name": "新疆投资发展（集团）有限责任公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 6,
+          "name": "新疆地矿投资（集团）有限责任公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 7,
+          "name": "新疆水利发展投资（集团）有限公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 8,
+          "name": "新疆交通投资（集团）有限责任公司",
+          "declared_domain": "www.xjjttzjt.com.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 9,
+          "name": "新疆商贸物流(集团)有限公司",
+          "declared_domain": "www.xjsmwl.com",
+          "official_url": ""
+        },
+        {
+          "rank": 10,
+          "name": "数字新疆产业投资（集团）有限公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 11,
+          "name": "新疆亚新煤层气投资开发（集团）有限责任公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 12,
+          "name": "新疆人才发展集团有限责任公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 13,
+          "name": "新疆农牧业投资（集团）有限责任公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 14,
+          "name": "新疆新业国有资产经营（集团）有限责任公司",
+          "declared_domain": "",
+          "official_url": ""
+        },
+        {
+          "rank": 15,
+          "name": "新疆金融投资（集团）有限责任公司",
+          "declared_domain": "www.xjjrtz.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 16,
+          "name": "新疆文化旅游投资集团有限公司",
+          "declared_domain": "www.xjwlt.com",
+          "official_url": ""
+        },
+        {
+          "rank": 17,
+          "name": "新疆教育出版社有限责任公司",
+          "declared_domain": "",
+          "official_url": ""
+        }
+      ]
+    },
+    {
+      "registry_id": "local-guangzhou",
+      "source_url": "https://gzw.gz.gov.cn/qy/zjjgqyml/content/post_10630755.html",
+      "provenance": {
+        "acquisition": "official_index_excerpt",
+        "retrieved_at": "2026-10-23",
+        "published_at": "2026-01-06",
+        "scope": "广州市国资委直接监管企业，不代表广东全省或所属单位",
+        "complete": false,
+        "note": "通过官方页面索引整理；本机尚未直连复核。所列官网域名仅作线索，不作为已监测招聘入口。"
+      },
+      "entries": [
+        {
+          "rank": 1,
+          "name": "广州汽车集团股份有限公司",
+          "declared_domain": "www.gac.com.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 2,
+          "name": "广州越秀集团股份有限公司",
+          "declared_domain": "www.yuexiu.com",
+          "official_url": ""
+        },
+        {
+          "rank": 3,
+          "name": "广州港集团有限公司",
+          "declared_domain": "www.gzpgroup.com",
+          "official_url": ""
+        },
+        {
+          "rank": 4,
+          "name": "广州医药集团有限公司",
+          "declared_domain": "www.gpc.com.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 5,
+          "name": "广州产业投资控股集团有限公司",
+          "declared_domain": "www.gz-chantou.com",
+          "official_url": ""
+        },
+        {
+          "rank": 6,
+          "name": "广州发展集团股份有限公司",
+          "declared_domain": "www.gdg.com.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 7,
+          "name": "广州市建筑集团有限公司",
+          "declared_domain": "www.gzmcg.com",
+          "official_url": ""
+        },
+        {
+          "rank": 8,
+          "name": "广州地铁集团有限公司",
+          "declared_domain": "www.gzmtr.com",
+          "official_url": ""
+        },
+        {
+          "rank": 9,
+          "name": "广州市城市建设投资集团有限公司",
+          "declared_domain": "www.gzci.net",
+          "official_url": ""
+        },
+        {
+          "rank": 10,
+          "name": "广州市水务投资集团有限公司",
+          "declared_domain": "www.gzwaterinvest.com",
+          "official_url": ""
+        },
+        {
+          "rank": 11,
+          "name": "广州交通投资集团有限公司",
+          "declared_domain": "www.gjtjt.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 12,
+          "name": "广州轻工工贸集团有限公司",
+          "declared_domain": "www.gzlig.com",
+          "official_url": ""
+        },
+        {
+          "rank": 13,
+          "name": "广州工业投资控股集团有限公司",
+          "declared_domain": "www.giihg.com",
+          "official_url": ""
+        },
+        {
+          "rank": 14,
+          "name": "广州岭南商旅投资集团有限公司",
+          "declared_domain": "www.gzln.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 15,
+          "name": "广州数字科技集团有限公司",
+          "declared_domain": "www.grg.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 16,
+          "name": "广州珠江实业集团有限公司",
+          "declared_domain": "www.gzprg.com",
+          "official_url": ""
+        },
+        {
+          "rank": 17,
+          "name": "广州珠江啤酒股份有限公司",
+          "declared_domain": "www.zhujiangbeer.com",
+          "official_url": ""
+        },
+        {
+          "rank": 18,
+          "name": "广州珠江钢琴集团股份有限公司",
+          "declared_domain": "www.pearlriverpiano.com",
+          "official_url": ""
+        },
+        {
+          "rank": 19,
+          "name": "广州酒家集团股份有限公司",
+          "declared_domain": "www.gzr.com.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 20,
+          "name": "广州环保投资集团有限公司",
+          "declared_domain": "www.grandtop.com.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 21,
+          "name": "广州市公共交通集团有限公司",
+          "declared_domain": "www.gzbus.com",
+          "official_url": ""
+        },
+        {
+          "rank": 22,
+          "name": "广州检验检测认证集团有限公司",
+          "declared_domain": "www.gzgjjt.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 23,
+          "name": "广州交易集团有限公司",
+          "declared_domain": "www.gzggzy.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 24,
+          "name": "广州安居集团有限公司",
+          "declared_domain": "www.gzaj.com",
+          "official_url": ""
+        },
+        {
+          "rank": 25,
+          "name": "广州人才集团有限公司",
+          "declared_domain": "www.gztalent.com.cn",
+          "official_url": ""
+        },
+        {
+          "rank": 26,
+          "name": "广州国有资产管理集团有限公司",
+          "declared_domain": "gz-goam.com",
+          "official_url": ""
+        }
+      ]
+    },
+    {
+      "registry_id": "local-18",
+      "source_url": "https://gzw.hunan.gov.cn/gzw/xxgk_71571/ssqyml/201803/t20180327_4980103.html",
+      "provenance": {
+        "acquisition": "official_index_excerpt",
+        "retrieved_at": "2026-10-23",
+        "published_at": "2025-02-21",
+        "scope": "湖南省直接及委托监管企业；不含第一大股东企业、地市与所属单位",
+        "complete": false,
+        "note": "历史页面摘录，仅纳入直接及委托监管部分；第一大股东身份不能单独证明国有控股。"
+      },
+      "entries": [
+        {
+          "rank": 1,
+          "name": "湖南钢铁集团有限公司"
+        },
+        {
+          "rank": 2,
+          "name": "湖南省高速公路集团有限公司"
+        },
+        {
+          "rank": 3,
+          "name": "湖南建设投资集团有限责任公司"
+        },
+        {
+          "rank": 4,
+          "name": "湖南农业发展投资集团有限责任公司"
+        },
+        {
+          "rank": 5,
+          "name": "湖南省机场管理集团有限公司"
+        },
+        {
+          "rank": 6,
+          "name": "湖南轨道交通控股集团有限公司"
+        },
+        {
+          "rank": 7,
+          "name": "湖南省港航水利集团有限公司"
+        },
+        {
+          "rank": 8,
+          "name": "湖南能源集团有限公司"
+        },
+        {
+          "rank": 9,
+          "name": "湘电集团有限公司"
+        },
+        {
+          "rank": 10,
+          "name": "湖南省矿产资源集团有限责任公司"
+        },
+        {
+          "rank": 11,
+          "name": "湖南盐业集团有限公司"
+        },
+        {
+          "rank": 12,
+          "name": "湖南海利高新技术产业集团有限公司"
+        },
+        {
+          "rank": 13,
+          "name": "湖南湘科控股集团有限公司"
+        },
+        {
+          "rank": 14,
+          "name": "湖南高新产业投资集团有限公司"
+        },
+        {
+          "rank": 15,
+          "name": "湖南兴湘投资控股集团有限公司"
+        },
+        {
+          "rank": 16,
+          "name": "湖南蓉园集团有限公司"
+        },
+        {
+          "rank": 17,
+          "name": "湖南湘勤集团有限公司"
+        },
+        {
+          "rank": 18,
+          "name": "湖南万安达集团有限责任公司"
+        },
+        {
+          "rank": 19,
+          "name": "湖南鑫牛资产管理集团有限公司"
+        }
+      ]
+    },
+    {
+      "registry_id": "central-other",
+      "source_url": "https://www.digitalchina.gov.cn/2026/xwzx/szkx/202610/t20261021_5384190.htm",
+      "provenance": {
+        "acquisition": "official_index_excerpt",
+        "retrieved_at": "2026-10-23",
+        "published_at": "2026-10-21",
+        "scope": "其他官方公告补充主体，不代表完整中央企业目录",
+        "complete": false,
+        "note": "官方成立公告补充，暂未接入招聘入口。"
+      },
+      "entries": [
+        {
+          "name": "国家数据集团有限公司",
+          "rank": 1
+        }
+      ]
+    }
+  ]
+}

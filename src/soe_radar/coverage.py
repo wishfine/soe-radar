@@ -18,12 +18,37 @@ from .urls import on_domains, public_url
 def parse_registry(html, spec):
     soup = BeautifulSoup(html, "html.parser")
     entries = {}
-    for row in soup.select("table tr"):
+    if spec.adapter in ("links", "numbered"):
+        if not spec.entry_selector:
+            raise ValueError("非表格名录必须配置正文选择器，不能从全站猜测企业名单")
+        for node in soup.select(spec.entry_selector):
+            values = (
+                [node.get_text(" ", strip=True)]
+                if spec.adapter == "links"
+                else node.get_text("\n", strip=True).splitlines()
+            )
+            for value in values:
+                name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", value).strip()
+                if not re.fullmatch(
+                    r"[\u4e00-\u9fffA-Za-z0-9（）()·\[\]【】—－\-]{4,100}(?:公司|银行|总局)", name
+                ):
+                    continue
+                if "集体" in name:
+                    continue
+                link = node if node.name == "a" else node.select_one("a[href]")
+                target = ""
+                if link:
+                    try:
+                        target = public_url(urljoin(spec.url, link.get("href", "")))
+                    except ValueError:
+                        pass
+                entries[name] = {"name": name, "official_url": target}
+    for row in soup.select("table tr") if spec.adapter == "table" else []:
         cells = row.find_all(["td", "th"], recursive=False)
         for col in spec.name_columns:
             if col < 1 or len(cells) <= col:
                 continue
-            rank = cells[col - 1].get_text(strip=True)
+            rank = re.sub(r"\s+", "", cells[col - 1].get_text(strip=True))
             name = re.sub(r"\s+", "", cells[col].get_text())
             if not re.fullmatch(r"\d{1,5}", rank) or not re.fullmatch(
                 r"[\u4e00-\u9fffA-Za-z0-9（）()·\[\]【】—－\-]{4,120}", name
@@ -39,6 +64,7 @@ def parse_registry(html, spec):
                 except ValueError:
                     pass
             entries[name] = {"name": name, "official_url": official_url}
+    entries = {name: entry for name, entry in entries.items() if name not in spec.exclude_names}
     if len(entries) < spec.min_entries:
         raise ValueError(f"名录未取得足够的编号企业行（{len(entries)}/{spec.min_entries}）；保留已有版本")
     return sorted(entries.values(), key=lambda x: x["name"])
@@ -105,7 +131,7 @@ def import_registry_csv(db, cfg, spec, content, proof_url, *, confirmed=False):
     )
 
 
-def _save_entries(db, cfg, spec, entries, raw, source_url, extension, status):
+def _save_entries(db, cfg, spec, entries, raw, source_url, extension, status, *, provenance=None):
     digest = hashlib.sha256(source_url.encode() + b"\0" + raw).hexdigest()
     folder = cfg.data_dir / "registries"
     folder.mkdir(parents=True, exist_ok=True)
@@ -125,6 +151,12 @@ def _save_entries(db, cfg, spec, entries, raw, source_url, extension, status):
                 source_url=source_url,
                 entries=entries,
                 raw_path=str(path.relative_to(cfg.data_dir)),
+                provenance=provenance
+                or {
+                    "acquisition": "direct" if status == "success" else "manual_csv",
+                    "scope": spec.scope,
+                    "complete": False,
+                },
             )
             s.add(snapshot)
             s.flush()
@@ -211,6 +243,7 @@ def coverage_report(db, cfg, *, cohort=None):
             )
         )
         memberships = {}
+        membership_evidence = {}
         registries = []
         for spec in cfg.registries:
             state = states.get(spec.id)
@@ -218,13 +251,21 @@ def coverage_report(db, cfg, *, cohort=None):
             if snapshot:
                 for entry in snapshot.entries:
                     memberships.setdefault(entry["name"], []).append(spec)
+                    membership_evidence.setdefault(entry["name"], []).append(
+                        {
+                            "registry_id": spec.id,
+                            "source_url": snapshot.source_url,
+                            "provenance": snapshot.provenance,
+                            "declared_domain": entry.get("declared_domain", ""),
+                        }
+                    )
             registries.append(
                 {
                     "id": spec.id,
                     "name": spec.name,
                     "category": spec.category,
                     "region": spec.region,
-                    "url": spec.url or (snapshot.source_url if snapshot else ""),
+                    "url": snapshot.source_url if snapshot else spec.url,
                     "refreshable": bool(spec.url),
                     "status": state.status if state else "unverified" if spec.url else "missing_entry",
                     "count": len(snapshot.entries) if snapshot else None,
@@ -232,6 +273,10 @@ def coverage_report(db, cfg, *, cohort=None):
                     "last_success": state.last_success if state else None,
                     "last_error": state.last_error if state else "",
                     "versions": sum(x.registry_id == spec.id for x in snapshots.values()),
+                    "provenance": snapshot.provenance if snapshot else {},
+                    "scope": spec.scope,
+                    "authority_url": spec.authority_url,
+                    "authority_proof_url": spec.authority_proof_url,
                 }
             )
         rows = []
@@ -287,6 +332,7 @@ def coverage_report(db, cfg, *, cohort=None):
                     "name": employer.name,
                     "parent_id": employer.parent_id,
                     "registry_ids": [r.id for r in member_of],
+                    "registry_evidence": membership_evidence.get(employer.name, []),
                     "categories": sorted({r.category for r in member_of}),
                     "regions": sorted({r.region for r in member_of}),
                     "proof_url": employer.proof_url,
@@ -318,6 +364,9 @@ def coverage_report(db, cfg, *, cohort=None):
             "missing_entry": sum(r["status"] == "missing_entry" for r in rows),
             "blocked": sum(r["status"] == "blocked" for r in rows),
             "registry_gaps": sum(r["count"] is None for r in registries),
+            "bundled_registries": sum(
+                r["provenance"].get("acquisition") == "official_index_excerpt" for r in registries
+            ),
         },
         "items": rows,
     }

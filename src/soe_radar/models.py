@@ -181,6 +181,7 @@ class RegistrySnapshot(Base):
     fetched_at: Mapped[str] = mapped_column(String, default=stamp)
     entries: Mapped[list] = mapped_column(JSON, default=list)
     raw_path: Mapped[str] = mapped_column(String)
+    provenance: Mapped[dict] = mapped_column(JSON, default=dict)
     __table_args__ = (UniqueConstraint("registry_id", "digest"),)
 
 
