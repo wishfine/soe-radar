@@ -1,6 +1,6 @@
 # SOE Radar 全国国央企校招扩覆盖 · 本轮实做报告
 
-验证与整理时间：2026-10-23 19:00–20:36（Asia/Shanghai）
+验证与整理时间：2026-10-23 19:00–20:40（Asia/Shanghai）
 代码分支：`feat/nationwide-coverage-20261023`
 个人数据库备份：`backups/before-nationwide-20261023.tar.gz`（迁移/采集前）
 
