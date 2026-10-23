@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+<meta name="SiteName" content="中华人民共和国财政部">
+<meta name="SiteDomain" content="http://www.mof.gov.cn">
+<meta name="SiteIDCode" content="bm14000001">
+<meta name="viewport" content="width=1000"/>
+<meta name="ArticleTitle" content="财政部履行出资人职责的中央企业名录"/>
+<meta name="PubDate" content="2026-03-24 09:00:00"/>
+<meta name="ContentSource" content="财政部"/>
+<meta name="Keywords" content="中央企业名录"/>
+<title>财政部履行出资人职责的中央企业名录</title>
+<link href="../../../images/favicon.ico" rel="shortcut icon" type="image/x-icon">
+ <script src="../../../images/jquery_3.min.js"></script>
+  <script src="../../../images/index.js"></script>
+<link href="../../../images/style_zz_3.css" rel="stylesheet" type="text/css">
+<style>
+.title_con{padding-bottom:15px}
+.gu-download{line-height:200%;paddin-top:20px;}
+.gu-download p{font-size:16px;}
+.gu-download li{font-size:15px;}
+.gu-download a{color: #2b50a8;}
+.gu-download a:hover{text-decoration: underline;}
+.conbottom{display: inline-block; width: 100%}
+  .docreltime{    display: inline-block;
+    float: left;}
+    .qrcode_wrap{position: relative;left: -400px; padding: 10px; width: 240px; height: 250px;background: #fff;border: solid 1px #d8d8d8;z-index: 11001;font-size: 12px;margin:0 auto}
+        .qrcode_header_left{float:left}
+        .qrcode_header_right{float:right}
+        .qrcode{margin-left:40px;margin-top:30px}
+        .qrcode_footer_tips{margin-top:20px}
+</style>
+
+</head>
+
+<body>
+
+<script>
+
+function getCurDate()
+{
+ var d = new Date();
+ var week;
+ switch (d.getDay()){
+ case 1: week="星期一"; break;
+ case 2: week="星期二"; break;
+ case 3: week="星期三"; break;
+ case 4: week="星期四"; break;
+ case 5: week="星期五"; break;
+ case 6: week="星期六"; break;
+ default: week="星期天";
+ }
+ var years = d.getFullYear();
+ var month = add_zero(d.getMonth()+1);
+ var days = add_zero(d.getDate());
+ var hours = add_zero(d.getHours());
+ var minutes = add_zero(d.getMinutes());
+ var seconds=add_zero(d.getSeconds());
+ var ndate = years+"年"+month+"月"+days+"日&nbsp;&nbsp;"+week;
+ var divT=document.getElementById("divT"); 
+ divT.innerHTML= ndate;
+}
+ 
+function add_zero(temp)
+{
+ if(temp<10) return "0"+temp;
+ else return temp;
+}
+setInterval("getCurDate()",100);
+
+</script>
+<style media=print>
+ @media print { .popfr { display: none;color:green } }
+</style>
+<style>
+@media screen and (max-width:1270px){ .popfr{ right:0 !important; } }
+@media screen and (max-width:1220px){ .popfr{display:none !important; } }
+</style>
+<body>
+<div class="popfr">
+<ul>
+<li><img src="../../../images/czb_pop3.jpg" /><h3>财政部微信</h3></li>
+<li><img src="../../../images/czb_pop4.jpg" /><h3>移动客户端</h3><span>Android下载</span></li>
+<li><img src="../../../images/czb_pop5.jpg" /><h3>移动客户端</h3><span>iphone下载</span></li>
+</ul>
+</div>
+<div class="logodiv">
+<h2><a href="http://www.mof.gov.cn"><img src="../../../images/czb_logo.png" alt="中华人民共和国财政部" /></a></h2>
+
+</div>
+<div class="nav">
+<p><span id="divT">2017年11月21日 星期二</span></p>
+<script>
+function goSearch(){
+  var swd=document.getElementById("searchword").value;
+if(swd=="" || swd==null || swd=="请输入关键字"){
+   alert("请输入关键词后再查询！");
+   return false;
+}else{
+ var form = document.getElementById('searchform');
+ form.submit();
+}
+}
+</script>
+<form action="http://search.mof.gov.cn/was5/web/search?channelid=204358" method="post" name="searchform" target="_blank" id="searchform" accept-charset="utf-8"  onsubmit="document.charset='utf-8'">
+<div class="zz_serach">
+		<div class="searchinput">
+		<input type="text" id="searchword" name="searchword" value="请输入关键字" onfocus="javascript:if(this.value=='请输入关键字')this.value='';" onblur="javascript:if(this.value=='')this.value='请输入关键字';" />
+		<ul>
+        	<li>
+            	 <p id="xia"></p>
+                    <ol id="bumen">
+                        <li></li>
+                    </ol>
+                    <div class="clear"></div>
+            </li>
+        </ul>
+         
+<script type="text/javascript"> 
+(function (){
+ var oSelect = document.getElementById("xia");
+ var oSub = document.getElementById("bumen");
+ var aLi = oSub.getElementsByTagName("li");
+ var i = 0;
+ 
+ oSelect.onclick = function (event)
+ {
+  var style = oSub.style;
+  style.display = style.display == "block" ? "none" : "block";
+  //阻止事件冒泡
+  (event || window.event).cancelBubble = true
+ };
+ 
+ for (i = 0; i < aLi.length; i++)
+ {
+  //鼠标划过
+  aLi[i].onmouseover = function ()
+  {
+   this.className = "hover"
+  };
+  //鼠标离开
+  aLi[i].onmouseout = function ()
+  {
+   this.className = "";
+  };
+  //鼠标点击
+  aLi[i].onclick = function ()
+  {
+   oSelect.innerHTML = this.innerHTML 
+  }
+ }
+ 
+ document.onclick = function ()
+ {
+  oSub.style.display = "none"; 
+ };
+})();
+</script>
+        </div>
+     <div class="buttoninput">
+          <span><a href="javascript:void(0)" onclick="javascript:goSearch();">搜索</a></span>
+          <!--<span><a href="">高级搜索</a></span>-->
+     </div>
+</div>
+</form>
+<div class="returnmain">
+	<a href="http://www.mof.gov.cn/">返回主站</a>
+
+</div>
+</div>
+
+<div class="mainboxerji">
+	<div class="box_content">
+    	<h2 class="title_con">财政部履行出资人职责的中央企业名录</h2>
+        <!--<div class="laiyuan"><p><span>2026年03月24日</span><span>来源：财政部</span></p></div>-->
+        <div class="my_conboxzw">
+       <div class=TRS_Editor><p class="MsoNormal" style="text-indent: 32pt">&nbsp;</p>
+<p class="MsoNormal" style="text-indent: 32pt"><span style="font-size: 16pt; font-family: 黑体"><font face="黑体">一、国务院授权财政部履行出资人职责的企业</font></span></p>
+<p class="MsoNormal" style="text-indent: 32pt"><span style="font-size: 16pt; font-family: 黑体"><font face="黑体"><br />
+</font></span></p>
+<table class="MsoNormalTable" style="border-top: medium none; border-right: medium none; width: 630.4pt; border-collapse: collapse; border-bottom: medium none; margin-left: 4.65pt; border-left: medium none" cellspacing="0" border="0">
+    <tbody>
+        <tr style="height: 31.5pt">
+            <td style="border-top: rgb(0,0,0) 1pt solid; border-right: rgb(0,0,0) 1pt solid; width: 115.25pt; border-bottom: rgb(0,0,0) 1pt solid; padding-bottom: 0pt; padding-top: 0pt; padding-left: 5.4pt; border-left: rgb(0,0,0) 1pt solid; padding-right: 5.4pt" width="192" valign="middle" nowrap="nowrap">
+            <p class="MsoNormal" style="vertical-align: middle; text-align: center" align="center"><b><span style="font-size: 14pt; font-family: 宋体; font-weight: bold; color: rgb(0,0,0); font-style: normal">企业序号</span></b></p>
+            </td>
+            <td style="border-top: rgb(0,0,0) 1pt solid; border-right: rgb(0,0,0) 1pt solid; width: 515.15pt; border-bottom: rgb(0,0,0) 1pt solid; padding-bottom: 0pt; padding-top: 0pt; padding-left: 5.4pt; border-left: medium none; padding-right: 5.4pt" width="858" valign="middle" nowrap="nowrap">
+            <p class="MsoNormal" style="vertical-align: middle; text-align: center" align="center"><b><span style="font-size: 14pt; font-family: 宋体; font-weight: bold; color: rgb(0,0,0); font-style: normal">企业名称</span></b></p>
+            </td>
+        </tr>
+        <tr style="height: 15pt">
+            <td style="border-top: medium none; border-right: rgb(0,0,0) 1pt solid; width: 115.25pt; border-bottom: rgb(0,0,0) 1pt solid; padding-bottom: 0pt; padding-top: 0pt; padding-left: 5.4pt; border-left: rgb(0,0,0) 1pt solid; padding-right: 5.4pt" width="192" valign="middle" nowrap="nowrap">
+            <p class="MsoNormal" style="vertical-align: middle; text-align: center" align="center"><span style="font-family: 宋体; color: rgb(0, 0, 0); font-style: normal;"><font style="line-height: 200%;" size="4">1</font></span></p>
+            </td>
+            <td style="border-top: medium none; border-right: rgb(0,0,0) 1pt solid; width: 515.15pt; border-bottom: rgb(0,0,0) 1pt solid; padding-bottom: 0pt; padding-top: 0pt; padding-left: 5.4pt; border-left: medium none; padding-right: 5.4pt" width="858" valign="middle" nowrap="nowrap">
+            <p class="MsoNormal" style="vertical-align: middle; text-align: left"><span style="font-family: 宋体; color: rgb(0, 0, 0); font-style: normal;"><font style="line-height: 200%;" size="4">中国国家铁路集团有限公司</font></span></p>
+            </td>
+        </tr>
+        <tr style="height: 15pt">
+            <td style="border-top: medium none; border-right: rgb(0,0,0) 1pt solid; width: 115.25pt; border-bottom: rgb(0,0,0) 1pt solid; padding-bottom: 0pt; padding-top: 0pt; padding-left: 5.4pt; border-left: rgb(0,0,0) 1pt solid; padding-right: 5.4pt" width="192" valign="middle" nowrap="nowrap">
+            <p class="MsoNormal" style="vertical-align: middle; text-align: center" align="center"><span style="font-family: 宋体; color: rgb(0, 0, 0); font-style: normal;"><font style="line-height: 200%;" size="4">2</font></span></p>
+            </td>
+            <td style="border-top: medium none; border-right: rgb(0,0,0) 1pt solid; width: 515.15pt; border-bottom: rgb(0,0,0) 1pt solid; padding-bottom: 0pt; padding-top: 0pt; padding-left: 5.4pt; border-left: medium none; padding-right: 5.4pt" width="858" valign="middle" nowrap="nowrap">
+            <p class="MsoNormal" style="vertical-align: middle; text-align: left"><span style="font-family: 宋体; color: rgb(0, 0, 0); font-style: normal;"><font style="line-height: 200%;" size="4">中国邮政集团有限公司</font></span></p>
+            </td>
+        </tr>
+        <tr style="height: 15pt">
+            <td style="border-top: medium none; border-right: rgb(0,0,0) 1pt solid; width: 115.25pt; border-bottom: rgb(0,0,0) 1pt solid; padding-bottom: 0pt; padding-top: 0pt; padding-left: 5.4pt; border-left: rgb(0,0,0) 1pt solid; padding-right: 5.4pt" width="192" valign="middle" nowrap="nowrap">
+            <p class="MsoNormal" style="vertical-align: middle; text-align: center" align="center"><span style="font-family: 宋体; color: rgb(0, 0, 0); font-style: normal;"><font style="line-height: 200%;" size="4">3</font></span></p>
+            </td>
+            <td style="border-top: medium none; border-right: rgb(0,0,0) 1pt solid; width: 515.15pt; border-bottom: rgb(0,0,0) 1pt solid; padding-bottom: 0pt; padding-top: 0pt; padding-left: 5.4pt; border-left: medium none; padding-right: 5.4pt" width="858" valign="middle" nowrap="nowrap">
+            <p class="MsoNormal" style="vertical-align: middle; text-align: left"><span style="font-family: 宋体; color: rgb(0, 0, 0); font-style: normal;"><font style="line-height: 200%;" size="4">中国烟草总公司</font></span></p>
+            </td>
+        </tr>
+        <tr style="height: 15pt">
+            <td style="border-top: medium none; border-right: rgb(0,0,0) 1pt solid; width: 115.25pt; border-bottom: rgb(0,0,0) 1pt solid; padding-bottom: 0pt; padding-top: 0pt; padding-left: 5.4pt; border-left: rgb(0,0,0) 1pt solid; padding-right: 5.4pt" width="192" valign="middle" nowrap="nowrap">
+            <p class="MsoNormal" style="vertical-align: middle; text-align: center" align="center"><span style="font-family: 宋体; color: rgb(0, 0, 0); font-style: normal;"><font style="line-height: 200%;" size="4">4</font></span></p>
+            </td>
+            <td style="border-top: medium none; border-right: rgb(0,0,0) 1pt solid; width: 515.15pt; border-bottom: rgb(0,0,0) 1pt solid; padding-bottom: 0pt; padding-top: 0pt; padding-left: 5.4pt; border-left: medium none; padding-right: 5.4pt" width="858" valign="middle" nowrap="nowrap">
+            <p class="MsoNormal" style="vertical-align: middle; text-align: left"><span style="font-family: 宋体; color: rgb(0, 0, 0); font-style: normal;"><font style="line-height: 200%;" size="4">北大荒农垦集团有限公司</font></span></p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+<p class="MsoNormal"><span style="font-size: 16pt; font-family: 仿宋_GB2312">&nbsp;</span></p>
+<p class="MsoNormal"><span style="font-size: 16pt; font-family: 黑体">&nbsp;&nbsp;&nbsp;&nbsp;</span><span style="font-size: 16pt; font-family: 黑体"><font face="黑体">二、国务院授权财政部履行出资人职责的中央文化企业</font></span></p>
+<p class="MsoNormal"><span style="font-size: 16pt; font-family: 仿宋_GB2312">&nbsp;&nbsp;&nbsp;&nbsp;</span></p>
+<table border="0" cellpadding="0" cellspacing="0" width="752" height="3682" style="border-collapse: collapse; width: 564.02pt;">
+    <colgroup><col width="141" style="width: 105.85pt;"></col><col width="345" style="width: 259.4pt;"></col><col width="265" style="width: 198.75pt;"></col></colgroup>
+    <tbody>
+        <tr height="40" style="height: 30pt;">
+            <td class="et7" height="40" width="141" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-size: 14pt; font-weight: 700; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 30pt; width: 105.85pt;">企业序号</td>
+            <td class="et8" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-size: 14pt; font-weight: 700; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; text-align: center; width: 259.4pt;">企业名称</td>
+            <td class="et7" width="265" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-size: 14pt; font-weight: 700; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; width: 198.75pt;">主管部门</td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="1" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">1</font></td>
+            <td class="et10" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国方正出版社有限公司</font></td>
+            <td class="et11" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中央纪委国家监委机关</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="2" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">2</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">党建读物出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中央组织部</font></td>
+        </tr>
+        <tr height="40" style="height: 30pt;">
+            <td class="et9" height="40" x:num="3" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 30pt;"><font size="4">3</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国出版集团有限公司</font></td>
+            <td rowspan="6" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中央宣传部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="4" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">4</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国新闻出版传媒集团有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="5" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">5</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">五洲传播出版传媒有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="6" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">6</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">学习出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="7" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">7</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">线装书局有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="8" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">8</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国书籍出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="9" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">9</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">宗教文化出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中央统战部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="10" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">10</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">当代世界出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中央对外联络部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="11" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">11</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国长安出版传媒有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中央政法委</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="12" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">12</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">九州出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中央台办</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="13" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">13</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">世界知识出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">外交部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="14" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">14</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国计划出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">国家发展改革委</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="15" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">15</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国教育出版传媒集团有限公司</font></td>
+            <td rowspan="2" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">教育部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="16" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">16</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">教育科学出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="17" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">17</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">科学技术文献出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">科技部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="18" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">18</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国工信出版传媒集团有限责任公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">工业和信息化部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="19" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">19</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国民族文化出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">国家民委</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="20" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">20</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国社会出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">民政部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="21" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">21</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">法律出版社有限公司</font></td>
+            <td rowspan="2" class="et15" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">司法部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="22" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">22</font></td>
+            <td class="et10" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国法治出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="23" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">23</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国财经出版传媒集团有限责任公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">财政部</font></td>
+        </tr>
+        <tr height="36" style="height: 27pt;">
+            <td class="et9" height="36" x:num="24" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 27pt;"><font size="4">24</font></td>
+            <td class="et10" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国人力资源和社会保障出版集团有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">人力资源社会保障部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="25" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">25</font></td>
+            <td class="et10" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国地图出版社集团有限公司</font></td>
+            <td rowspan="6" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">自然资源部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="26" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">26</font></td>
+            <td class="et10" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">海洋出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="27" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">27</font></td>
+            <td class="et10" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国大地出版传媒集团有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="28" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">28</font></td>
+            <td class="et10" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">成都地图出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="29" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">29</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">西安地图出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="30" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">30</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">哈尔滨地图出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="31" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">31</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国环境出版集团有限公司</font></td>
+            <td rowspan="2" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">生态环境部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="32" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">32</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国环境报社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="33" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">33</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国建筑出版传媒有限公司</font></td>
+            <td rowspan="3" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">住房城乡建设部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="34" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">34</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国城市出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="35" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">35</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">建筑杂志社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="36" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">36</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">人民交通出版传媒管理有限公司</font></td>
+            <td rowspan="3" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">交通运输部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="37" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">37</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国交通报社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="38" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">38</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国水运报社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="39" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">39</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国水利水电出版传媒集团有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">水利部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="40" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">40</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国农业出版社有限公司</font></td>
+            <td rowspan="2" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">农业农村部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="41" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">41</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国农业科学技术出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="42" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">42</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国商务出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">商务部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="43" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">43</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国文化传媒集团有限公司</font></td>
+            <td rowspan="8" class="et15" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">文化和旅游部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="44" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">44</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国东方演艺集团有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="45" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">45</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">国家图书馆出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="46" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">46</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国动漫集团有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="47" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">47</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国数字文化集团有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="48" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">48</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">故宫出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="49" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">49</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">文化艺术出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="50" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">50</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国旅游出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="51" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">51</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">人民卫生出版社有限公司</font></td>
+            <td rowspan="3" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">国家卫生健康委</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="52" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">52</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">健康报社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="53" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">53</font></td>
+            <td class="et10" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国人口与健康出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="54" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">54</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">应急管理出版社有限公司</font></td>
+            <td rowspan="2" class="et15" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">应急管理部</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="55" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">55</font></td>
+            <td class="et10" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国应急管理报社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="56" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">56</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国金融出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中国人民银行</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="57" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">57</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国时代经济出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">审计署</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="58" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">58</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">化学工业出版社有限公司</font></td>
+            <td rowspan="7" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">国务院国资委</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="59" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">59</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国轻工业出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="60" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">60</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国纺织出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="61" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">61</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">冶金工业出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="62" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">62</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国财富出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="63" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">63</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国商业出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="64" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">64</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">企业管理出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="65" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">65</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国海关出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">海关总署</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="66" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">66</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国税务出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">税务总局</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="67" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">67</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国质量标准出版传媒有限公司</font></td>
+            <td rowspan="2" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">市场监管总局</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="68" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">68</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国工商出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="69" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">69</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国广播电视网络集团有限公司</font></td>
+            <td rowspan="2" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">广电总局</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="70" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">70</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国广播影视出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="71" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">71</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国体育报业总社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">体育总局</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="72" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">72</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国统计出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">国家统计局</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="73" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">73</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国言实出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">国务院研究室</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="74" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">74</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国国际广播出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中央广电总台</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="75" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">75</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国能源传媒集团有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">国家能源局</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="76" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">76</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国林业出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">国家林草局</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="77" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">77</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国民航报社有限公司</font></td>
+            <td rowspan="2" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中国民航局</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="78" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">78</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国民航出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="79" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">79</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">文物出版社有限公司</font></td>
+            <td rowspan="2" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">国家文物局</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="80" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">80</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国文物报社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="81" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">81</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国中医药出版社有限公司</font></td>
+            <td rowspan="3" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">国家中医药局</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="82" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">82</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国中医药报社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="83" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">83</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中医古籍出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="84" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">84</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国健康传媒集团有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">国家药监局</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="85" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">85</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">知识产权出版社有限责任公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">国家知识产权局</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="86" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">86</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">金城出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">国家保密局</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="87" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">87</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国文史出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">全国政协办公厅</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="88" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">88</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">人民法院出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">最高人民法院</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="89" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">89</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国检察出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">最高人民检察院</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="90" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">90</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国少年儿童新闻出版总社有限公司</font></td>
+            <td rowspan="2" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">共青团中央</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="91" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">91</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国青年出版总社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="92" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">92</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国妇女出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">全国妇联</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="93" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">93</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国电影出版社有限公司</font></td>
+            <td rowspan="5" class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中国文联</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="94" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">94</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国文联出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="95" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">95</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国摄影出版传媒有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="96" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">96</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国书法出版传媒有限责任公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="97" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">97</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">书法出版社有限公司</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="98" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">98</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">作家出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中国作协</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="99" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">99</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国科学技术出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中国科协</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="100" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">100</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国华侨出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中国侨联</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="101" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">101</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">华夏出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中国残联</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="102" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">102</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国红十字报刊社</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">中国红十字会总会</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="103" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">103</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">团结出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">民革中央</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="104" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">104</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">群言出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">民盟中央</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="105" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">105</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">开明出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">民进中央</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="106" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">106</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国致公出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">致公党中央</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="107" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">107</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">学苑出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">九三学社中央</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="108" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">108</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">台海出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">台盟中央</font></td>
+        </tr>
+        <tr height="33" style="height: 25pt;">
+            <td class="et9" height="33" x:num="109" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap; text-align: center; height: 25pt;"><font size="4">109</font></td>
+            <td class="et12" width="345" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; width: 259.4pt;"><font size="4">中国铁道出版社有限公司</font></td>
+            <td class="et13" x:str="" style="padding-top: 1px; padding-left: 1px; padding-right: 1px; font-family: 宋体; border-width: 0.5pt; border-style: solid; border-color: rgb(0, 0, 0); vertical-align: middle; white-space: nowrap;"><font size="4">国铁集团</font></td>
+        </tr>
+    </tbody>
+</table>
+<p class="MsoNormal"><font face="黑体" style="font-size: 16pt; font-family: 黑体;">&nbsp; &nbsp;</font><font size="4"><font style="" face="宋体">&nbsp;</font></font></p>
+<p class="MsoNormal"><span style="font-family: 宋体; font-size: large;">备注：另有财政部代表国务院履行出资人职责的参股文化企业2户，为民建中央主管的民主与建设出版社有限责任公司、全国工商联主管的中华工商联合出版社有限责任公司。</span></p>
+<p class="MsoNormal"><span style="font-size: 16pt; font-family: 黑体"><font face="黑体">&nbsp; &nbsp;&nbsp;</font></span></p>
+<p class="MsoNormal"><span style="font-size: 16pt; font-family: 黑体"><font face="黑体">&nbsp; &nbsp; 三、中央金融企业</font></span></p>
+<p class="MsoNormal"><span style="font-size: 16pt; font-family: 黑体"><font face="黑体"><br />
+</font></span></p>
+<p class="MsoNormal" style="text-indent: 32pt"><span style="font-size: 16pt; font-family: 仿宋_GB2312">http://jrs.mof.gov.cn</span><span style="font-size: 16pt; font-family: 仿宋_GB2312">/gongzuotongzhi/202102/t20210219_3658752.htm</span></p>
+<div class="TRS_PreAppend" style="overflow-x: hidden; word-break: break-all">
+<p class="MsoNormal" style="text-indent: 32pt">&nbsp;</p>
+</div></div>
+<div class="gu-download">
+<p id="down-tit1">附件下载:</p>
+<ul id="down1">
+    <li>
+          <span id="appendix1" >
+           
+          </span>
+
+        <SCRIPT LANGUAGE="JavaScript">
+            
+            {
+
+                var handel=document.getElementById("appendix1")
+                var handel1=document.getElementById("down1")
+                var handel2=document.getElementById("down-tit1")
+
+                if(handel.innerText=="")
+                {
+                    handel1.style.display="none";
+                    handel2.style.display="none";
+                }
+            }
+            
+        </SCRIPT>
+     </li>
+</ul>
+</div>
+
+<div class="gu-download">
+<p id="down-tit">相关文章:</p>
+<ul id="down">
+    
+</ul>
+  <SCRIPT LANGUAGE="JavaScript">
+            
+            {
+
+               
+                var handel1=document.getElementById("down")
+                var handel2=document.getElementById("down-tit")
+
+                if(handel1.innerText=="")
+                {
+                    handel1.style.display="none";
+                    handel2.style.display="none";
+                }
+            }
+            
+        </SCRIPT>
+
+
+</div>
+
+
+    </div>
+ <div class="conbottom">
+<div class="docreltime">
+<span>发布日期:&nbsp;&nbsp;2026年03月24日</span>
+</div>
+    <div class="sharebox">
+        <div class="bdsharebuttonbox sharebar">
+            <span><img src="../../../images/fenxiang.png" alt="" /></span>
+            <a class="bds_tsina" data-cmd="tsina" title="分享到新浪微博"><img src="../../../images/wb.png" /></a>
+            <a class="bds_weixin" data-cmd="weixin" title="分享到微信"><img src="../../../images/wx.png" /></a>
+        </div>
+        <div class="qrcode_wrap" style="display: none">
+            <div class="qrcode_header_tips">
+                <span class="qrcode_header_left">分享到微信朋友圈</span>
+                <span class="qrcode_header_right">x</span>
+            </div>
+            <div id="qrcode" class="qrcode"></div>
+            <div class="qrcode_footer_tips">打开微信，点击底部的“发现”，<br>使用“扫一扫”即可将网页分享至朋友圈。</div>
+        </div>
+        <script src="../../../images/qrcode_share.js"></script>
+        <script src="../../../images/utils_share.js"></script>
+        <script type="text/javascript">
+            //分享
+        
+            $(function () {
+        
+                // 分享按钮事件
+        
+                $(".bds_weixin").on("click", function (e) {
+                    e.preventDefault();
+                    $(".qrcode_wrap").show();
+                });
+                $(".qrcode_header_right").on("click", function (e) {
+                    e.preventDefault();
+                    $(".qrcode_wrap").hide();
+                });
+                // 微信生成二维码
+                var qrcode = new QRCode(document.getElementById("qrcode"), {
+                    width: 150,//设置宽高
+                    height: 150
+                });
+        
+                qrcode.makeCode(window.location.href);
+        
+                // 微博分享
+                $(".bds_tsina").on("click", function () {
+                    var url = window.location.href;
+                    var opts = {
+                        url: url,
+                        title: document.title,
+                        pic: ''
+                    };
+                    weiboShare(opts);
+                });
+        
+            })
+        
+        
+            function weiboShare(opts) {
+                var sinaUrl = "http://service.weibo.com/share/" + "share.php";
+                sinaUrl = Util.appendParam(sinaUrl, opts);
+                try {
+                    window.open(sinaUrl)
+                } catch (e) { }
+            }
+        </script>
+        
+        
+        
+</div>
+</div>
+<div class="clear"></div>
+     <div class="conboxdown">
+    		<span>【<a class="content_big"> 大 </a><a class="content_middle"> 中 </a> <a class="content_small"> 小 </a>】</span>
+            <span><a href="javascript:window.print()">【打印此页】</a></span>
+            <span><a href="javascript:close()">【关闭窗口】</a></span>
+    </div>
+    
+    </div>
+</div>
+<style>
+.footerconfr ul li{float:none;display: inline-block;border-left: 1px solid #999;border-right:0;}
+.footerconfr ul li:first-child{border-left:0;}
+</style>
+
+<div id="footer">
+<div class="footercon">
+<div class="footerconfl">
+<a class="findMistake" href="http://121.43.68.40/exposure/jiucuo.html?site_code=bm14000001&url=http%3A%2F%2Fwww.mof.gov.cn%2Findex.htm" target="_blank"><img style="border:0px;" src="../../../images/czb_jiucuo.png" /></a>
+<a href="http://bszs.conac.cn/sitename?method=show&id=266EB2A9742A78D5E053022819ACC6F4" target="_blank"><img src="../../../images/czb_dangzh.png" /></a>
+</div>
+<div class="footerconfr">
+ <ul>
+   <li><a href="http://www.mof.gov.cn/wzdt/" target="_blank">网站地图</a></li>
+  <li><a href="http://www.mof.gov.cn/gywm/" target="_blank">联系我们</a></li>
+ 
+  <div class="clear"></div>
+ </ul>
+ <p>主办单位：中华人民共和国财政部<br />
+网站标识码：bm14000001&nbsp;&nbsp;<a href="https://beian.miit.gov.cn/#/Integrated/index" target="_blank" style="color:#777;"> 京ICP备05002860号</a> &nbsp;&nbsp;<a href="http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=11010202000002" target="_blank" style="color:#777;"><img src="../../../images/czb_beian.png" />京公网安备11010202000006号</a><br />
+技术支持：财政部信息网络中心<br />
+中华人民共和国财政部&nbsp;&nbsp;版权所有，如需转载，请注明来源</p>   
+</div>
+<div class="clear"></div>
+</div> 
+</div>
+
+<script type="text/javascript">
+//分享
+
+</script>
+</body>
+</html>
