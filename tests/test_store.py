@@ -30,6 +30,19 @@ def test_idempotent_ingest_and_original_evidence(db, cfg):
         assert s.get(Opportunity, first["id"]).review_status == "auto"
 
 
+def test_parser_metadata_corrections_reuse_existing_document_opportunity(db, cfg):
+    document = sample()
+    first = ingest(db, cfg, document, extract_rules(document))
+    corrected = extract_rules(document)
+    corrected.season = "秋招"
+    with db.session() as s:
+        s.scalar(select(Document)).parser_version = "old"
+        s.add(PersonalState(opportunity_id=first["id"], saved=True))
+    result = ingest(db, cfg, document, corrected)
+    assert result["id"] == first["id"]
+    assert result["personal"]["saved"]
+
+
 def test_same_url_new_year_preserves_old_record_and_personal_state(db, cfg):
     old = sample()
     first = ingest(db, cfg, old, extract_rules(old))
@@ -228,3 +241,20 @@ def test_scoped_deadline_updates_preserve_child_state_and_calendar_sequence(db, 
             )
             == 2
         )
+
+
+def test_reparse_clears_unverified_false_deadline_instead_of_displaying_it_forever(db, cfg):
+    from soe_radar.schemas import Claim
+
+    document = sample()
+    result = extract_rules(document)
+    result.review_reasons = ["需要核验"]
+    first = ingest(db, cfg, document, result)
+    corrected = extract_rules(document)
+    corrected.deadline = Claim()
+    corrected.review_reasons = ["截止尚未公布"]
+    with db.session() as s:
+        s.scalar(select(Document)).parser_version = "old"
+    saved = ingest(db, cfg, document, corrected)
+    assert saved["id"] == first["id"]
+    assert saved["deadline"]["value"] is None

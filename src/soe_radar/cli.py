@@ -8,7 +8,6 @@ import sqlite3
 import tarfile
 import tempfile
 from datetime import datetime
-from importlib.resources import files
 from pathlib import Path
 
 import typer
@@ -54,7 +53,7 @@ def init():
     path = config_path()
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(files("soe_radar").joinpath("defaults.yaml").read_text())
+        path.write_text("# 仅填写个人覆盖项，未配置部分继承仓库默认值。\n{}\n")
     cfg = load_settings(path)
     db = initialize(cfg)
     db.engine.dispose()
@@ -298,6 +297,45 @@ def observe():
     )
 
 
+@app.command("repair")
+def repair_data(
+    apply_changes: bool = typer.Option(False, "--apply", help="备份后合并同届重复记录并离线重解析"),
+):
+    """默认预览，保留所有原文、人工决定、备注和被合并记录。"""
+    from .maintenance import repair, reparse
+
+    cfg = load_settings()
+    if server_running(cfg.data_dir / "server.pid"):
+        raise typer.BadParameter("请先停止本地服务再修复")
+    if apply_changes:
+        backup(
+            cfg.data_dir.parent
+            / "backups"
+            / ("before-repair-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f") + ".tar.gz")
+        )
+    db = initialize(cfg)
+    from uuid import uuid4
+
+    owner = "repair-" + uuid4().hex
+    locked = []
+    try:
+        if apply_changes:
+            for name in ("sync", "model"):
+                if not db.acquire(name, owner, 600):
+                    raise typer.BadParameter("同步或模型任务正在运行，请等待租约释放后重试")
+                locked.append(name)
+        result = repair(db, cfg, apply=apply_changes)
+        if apply_changes:
+            result["reparse"] = asyncio.run(reparse(db, cfg))
+            result["second_pass"] = repair(db, cfg, apply=True)
+            (cfg.data_dir / "repair-report.json").write_text(json.dumps(result, ensure_ascii=False, indent=2))
+        output(result)
+    finally:
+        for name in locked:
+            db.release(name, owner)
+        db.engine.dispose()
+
+
 @dataset_app.command("export")
 def dataset_export(destination: Path):
     """导出真实文档为待人工标注 JSONL，不自动填充真值。"""
@@ -306,17 +344,26 @@ def dataset_export(destination: Path):
     if destination.exists():
         raise typer.BadParameter("文件已存在，请选择新路径")
     destination.parent.mkdir(parents=True, exist_ok=True)
+    from .maintenance import label_group, saved_input
+
     with db.session() as s, destination.open("w") as out:
-        for index, doc in enumerate(s.scalars(select(Document).order_by(Document.fetched_at))):
+        groups = {}
+        activity_groups = {}
+        for doc in s.scalars(select(Document).order_by(Document.fetched_at.desc())):
+            value = saved_input(doc, cfg)
+            group = label_group(value)
+            if doc.opportunity_id:
+                from .models import Opportunity
+
+                opportunity = s.get(Opportunity, doc.opportunity_id)
+                if opportunity:
+                    group = activity_groups.setdefault(opportunity.activity_id, group)
+            groups.setdefault(group, (doc, value))
+        for index, (group, (doc, value)) in enumerate(sorted(groups.items())):
             record = {
-                "document": {
-                    "url": doc.url,
-                    "title": doc.title,
-                    "text": doc.text,
-                    "published_at": doc.published_at,
-                    "source_id": doc.source_id,
-                },
+                "document": value.model_dump(mode="json"),
                 "sha256": doc.digest,
+                "group_id": group,
                 "split": "dev" if index < 100 else "test",
                 "annotation_type": "unlabeled",
                 "annotator": "",
@@ -334,8 +381,21 @@ def evaluate(path: Path):
     labeled = [
         r for r in records if r.get("annotation_type") == "human" and r.get("annotator") and r.get("expected")
     ]
-    held = [r for r in labeled if r.get("split") == "test"]
-    dev = [r for r in labeled if r.get("split") == "dev"]
+    from .maintenance import label_group
+
+    groups = {}
+    duplicates = 0
+    leakage = set()
+    for row in labeled:
+        group = row.get("group_id") or label_group(DocumentInput.model_validate(row["document"]))
+        if group in groups:
+            duplicates += 1
+            if groups[group].get("split") != row.get("split"):
+                leakage.add(group)
+            continue
+        groups[group] = row
+    held = [r for g, r in groups.items() if r.get("split") == "test" and g not in leakage]
+    dev = [r for g, r in groups.items() if r.get("split") == "dev" and g not in leakage]
     predicted, correct, clear, recalled = 0, 0, 0, 0
     for row in held:
         doc = DocumentInput.model_validate(row["document"])
@@ -350,13 +410,15 @@ def evaluate(path: Path):
             recalled += int(matches)
     precision = correct / predicted if predicted else None
     recall = recalled / clear if clear else None
-    ready = len(dev) >= 100 and len(held) >= 50
+    ready = len(dev) >= 100 and len(held) >= 50 and not leakage and not duplicates
     output(
         {
             "scope": "rule_parser_only",
             "human_dev": len(dev),
             "human_holdout": len(held),
             "dataset_requirement_met": ready,
+            "duplicate_annotations": duplicates,
+            "leaked_groups": len(leakage),
             "precision": precision,
             "clear_recall": recall,
             "abstention_rate": (1 - predicted / len(held)) if held else None,

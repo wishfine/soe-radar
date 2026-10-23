@@ -19,9 +19,7 @@ from .urls import canonical, on_domains, public_url
 
 SIGNAL = re.compile(r"招聘|校招|毕业生|补录|报名|延期")
 SPECIFIC = re.compile(r"20\d{2}|公司|集团|银行|研究院|研究所|总部|学院|校园")
-PUBLISH_RE = re.compile(
-    r"(?:发布(?:时间|日期)?|来源时间|日期|时间)[：:\s]*(20\d{2})[年./-](\d{1,2})[月./-](\d{1,2})"
-)
+PUBLISH_RE = re.compile(r"(?:发布(?:时间|日期)|来源时间)[：:\s]*(20\d{2})[年./-](\d{1,2})[月./-](\d{1,2})")
 
 
 @dataclass
@@ -47,6 +45,7 @@ def extract_page(url: str, html: str) -> Page:
     pagination = re.search(
         r'createPageHTML\(\s*(\d+)\s*,\s*(\d+)\s*,\s*["\']([\w-]+)["\']\s*,\s*["\'](html?)["\']\s*\)', html
     )
+
     if pagination:
         count, current, name, extension = pagination.groups()
         if int(current) + 1 < int(count) <= 10000:
@@ -68,7 +67,7 @@ def extract_page(url: str, html: str) -> Page:
         if heading
         else (soup.title.get_text(" ", strip=True) if soup.title else "")
     )
-    full_text = soup.get_text(" ", strip=True)
+    full_text = (soup.body or soup).get_text(" ", strip=True)
     published = None
     meta = soup.select_one(
         'meta[property="article:published_time"],meta[name="publishdate"],meta[name="PubDate"]'
@@ -79,21 +78,21 @@ def extract_page(url: str, html: str) -> Page:
         candidate = time_node.get("datetime") or time_node.get_text(" ", strip=True)
     match = re.search(r"(20\d{2})[年./-](\d{1,2})[月./-](\d{1,2})", candidate)
     if not match:
-        match = PUBLISH_RE.search(full_text[:6000])
-    if not match:
         # BOC and other official articles put the publish date immediately after the heading.
         if heading:
-            after = full_text.find(title)
-            match = re.search(
-                r"(20\d{2})[年./-](\d{1,2})[月./-](\d{1,2})",
-                full_text[after + len(title) : after + len(title) + 100],
-            )
+            nearby = " ".join(str(x) for x in list(heading.next_siblings)[:6])
+            nearby = BeautifulSoup(nearby, "html.parser").get_text(" ", strip=True)
+            match = re.match(r"\s*(20\d{2})[年./-](\d{1,2})[月./-](\d{1,2})(?:日)?(?:\s|$)", nearby)
+    if not match:
+        match = PUBLISH_RE.search(full_text[:6000])
     if match:
         try:
             published = date(*map(int, match.groups()))
         except ValueError:
             pass
-    for element in soup.select("script,style,noscript,nav,header,footer"):
+    for element in soup.select(
+        'script,style,noscript,nav,header,footer,[hidden],[aria-hidden="true"],.modal,.dialog,.pop-up'
+    ):
         element.decompose()
     body = None
     for selector in [
@@ -111,7 +110,9 @@ def extract_page(url: str, html: str) -> Page:
         "main",
     ]:
         candidate_body = soup.select_one(selector)
-        if candidate_body and (len(candidate_body.get_text()) > 80 or candidate_body.select_one("img")):
+        if candidate_body and (
+            len(candidate_body.get_text(strip=True)) > 20 or candidate_body.select_one("img")
+        ):
             body = candidate_body
             break
     body = body or soup.body or soup
@@ -123,8 +124,11 @@ def extract_page(url: str, html: str) -> Page:
         for target, label in links
         if re.search(r"\.(pdf|png|jpg|jpeg)(?:[?#]|$)", target, re.I)
     ]
-    for img in body.select("img[src]"):
-        target = urljoin(url, img.get("src", ""))
+    for img in body.select("img[src],img[data-src],img[data-original]"):
+        image_url = img.get("data-original") or img.get("data-src") or img.get("src", "")
+        if not image_url.strip():
+            continue
+        target = urljoin(url, image_url)
         if target.startswith(("http://", "https://")) and target not in {a["url"] for a in attachments}:
             attachments.append({"url": target, "label": img.get("alt") or "正文图片（待人工读取）"})
     return Page(
@@ -135,6 +139,33 @@ def extract_page(url: str, html: str) -> Page:
         published_at=published,
         attachments=attachments,
         pagination_known=bool(pagination),
+    )
+
+
+def embedded_article(url, html):
+    """Read JSON string literals from Nuxt SSR data; do not evaluate JavaScript."""
+    import json
+
+    values = []
+    for token in re.finditer(r'"(?:[^"\\]|\\.)*"', html):
+        try:
+            value = json.loads(token.group())
+        except ValueError:
+            continue
+        if isinstance(value, str):
+            values.append(value)
+    headings = [
+        v for v in values if re.fullmatch(r"[^<>]{0,50}20\d{2}[^<>]{0,40}(?:校园招聘|届校招)[^<>]{0,20}", v)
+    ]
+    fragments = [
+        v for v in values if re.search(r"<(?:p|article|div)[\s>]", v) and ("<img" in v or SIGNAL.search(v))
+    ]
+    if not headings or not fragments:
+        raise FetchFailure("内嵌页面没有找到明确的校招正文")
+    from html import escape
+
+    return extract_page(
+        url, "<h1>" + escape(headings[-1]) + "</h1><article>" + "\n".join(fragments[:5]) + "</article>"
     )
 
 
@@ -157,7 +188,9 @@ class Fetcher:
     async def close(self):
         await self.client.aclose()
 
-    async def get(self, url: str, domains: list[str] | None = None) -> httpx.Response:
+    async def get(
+        self, url: str, domains: list[str] | None = None, *, method="GET", payload=None
+    ) -> httpx.Response:
         import ipaddress
         import time
 
@@ -190,7 +223,9 @@ class Fetcher:
             response = None
             for attempt in range(2):
                 try:
-                    response = await self.client.get(url)
+                    response = await self.client.request(
+                        method, url, json=payload if method == "POST" else None
+                    )
                     if response.status_code >= 500 and attempt == 0:
                         await asyncio.sleep(1)
                         continue
@@ -211,15 +246,32 @@ class Fetcher:
         raise FetchFailure("来源跳转次数过多")
 
     async def page(self, url: str, source: SourceSpec, *, detail=False) -> Page:
+        detail = detail or source.entry_is_document
         failure = ""
         try:
-            response = await self.get(url, source.domains)
+            is_api = source.adapter == "json" and urlsplit(url).path == urlsplit(source.url).path
+            payload = dict(source.api_body)
+            if is_api and source.api_next_param:
+                payload[source.api_next_param] = dict(parse_qsl(urlsplit(url).query)).get(
+                    source.api_next_param, payload.get(source.api_next_param, 1)
+                )
+            response = await self.get(
+                url, source.domains, method=source.api_method if is_api else "GET", payload=payload
+            )
             content_type = response.headers.get("content-type", "")
             if "pdf" in content_type or urlsplit(url).path.lower().endswith(".pdf"):
                 reader = PdfReader(io.BytesIO(response.content))
                 text = "\n".join(page.extract_text() or "" for page in reader.pages)
                 if len(text.strip()) < 40:
-                    raise FetchFailure("扫描型 PDF 需要 OCR 或人工核验")
+                    return Page(
+                        url=str(response.url),
+                        title=source.name + "招聘附件",
+                        text="",
+                        via="pdf",
+                        attachments=[
+                            {"url": str(response.url), "label": "扫描型招聘 PDF", "status": "needs_ocr"}
+                        ],
+                    )
                 return Page(url=str(response.url), title=source.name + "招聘附件", text=text, via="pdf")
             if "json" in content_type:
                 return self.api_page(str(response.url), response.json(), source)
@@ -229,7 +281,11 @@ class Fetcher:
                     response.encoding = encoding.group(1).decode()
                 except (UnicodeError, LookupError):
                     pass
-            page = extract_page(str(response.url), response.text)
+            page = (
+                embedded_article(str(response.url), response.text)
+                if source.adapter == "nuxt"
+                else extract_page(str(response.url), response.text)
+            )
             shell = (
                 (len(page.text) < 40 and not (page.attachments and SIGNAL.search(page.title)))
                 if detail
@@ -277,7 +333,9 @@ class Fetcher:
                 if len(page.text) > 80 and (detail or self.candidates(page, source)):
                     return page
             except Exception as exc:
-                failure += f"；浏览器：{type(exc).__name__}"
+                failure += (
+                    f"；浏览器：{type(exc).__name__} {str(exc).splitlines()[0][:180] if str(exc) else ''}"
+                )
         if self.cfg.jina_enabled:
             try:
                 response = await self.get("https://r.jina.ai/" + public_url(url))
@@ -336,7 +394,11 @@ class Fetcher:
     def candidates(page: Page, source: SourceSpec):
         found = {}
         for url, label in page.links:
-            if len(label) < 6 or not SIGNAL.search(label) or not SPECIFIC.search(label):
+            if label == "下一页":
+                continue
+            if page.via != "api" and (
+                len(label) < 6 or not SIGNAL.search(label) or not SPECIFIC.search(label)
+            ):
                 continue
             if not on_domains(url, source.domains):
                 continue
@@ -357,7 +419,8 @@ class Fetcher:
             if SIGNAL.search(page.title) and re.search(r"20\d{2}|校园|毕业生", page.title)
             else title_hint or page.title
         )
-        if len(title) < 6 or not SIGNAL.search(title):
+        metadata = self.api_metadata.get(canonical(url), {})
+        if len(title) < 6 or not SIGNAL.search(title) and not metadata:
             raise FetchFailure("详情页未发现招聘标题，疑似导航/错误页面")
         attachments = []
         sections = [page.text]
@@ -386,10 +449,51 @@ class Fetcher:
                     item["error"] = type(exc).__name__
             else:
                 item["status"] = "needs_review"
+                if on_domains(attachment["url"], source.domains):
+                    try:
+                        response = await self.get(attachment["url"], source.domains)
+                        mime = response.headers.get("content-type", "").split(";")[0]
+                        suffix = {
+                            "image/png": ".png",
+                            "image/jpeg": ".jpg",
+                            "image/gif": ".gif",
+                            "image/webp": ".webp",
+                        }.get(mime)
+                        if suffix:
+                            item["sha256"] = hashlib.sha256(response.content).hexdigest()
+                            local = self.cfg.data_dir / "attachments" / (item["sha256"] + suffix)
+                            local.parent.mkdir(parents=True, exist_ok=True)
+                            if not local.exists():
+                                local.write_bytes(response.content)
+                            item["local_path"] = str(local.relative_to(self.cfg.data_dir))
+                    except (FetchFailure, httpx.HTTPError):
+                        item["error"] = "图片未留存，可核对原链接后人工转录"
             attachments.append(item)
         if len(page.attachments) > 8:
             attachments.append({"label": "其余附件超过本轮读取上限", "status": "needs_review"})
-        metadata = self.api_metadata.get(canonical(url), {})
+        structured = {}
+        if metadata:
+            for field in ("location", "education", "major"):
+                if metadata.get(source.api_fields.get(field, field)):
+                    structured[field] = str(metadata[source.api_fields.get(field, field)])
+            if str(metadata.get(source.api_fields.get("type", "recruitType"))) == "1":
+                structured["recruitment_type"] = "campus"
+            published = metadata.get(source.api_fields.get("published", "publishDate"))
+            if published and not page.published_at:
+                try:
+                    from datetime import datetime
+                    from zoneinfo import ZoneInfo
+
+                    page.published_at = (
+                        datetime.fromtimestamp(
+                            float(published) / (1000 if float(published) > 100000000000 else 1),
+                            ZoneInfo("Asia/Shanghai"),
+                        ).date()
+                        if str(published).isdigit()
+                        else date.fromisoformat(str(published)[:10])
+                    )
+                except (ValueError, OverflowError, OSError):
+                    pass
         employer = metadata.get(source.api_fields.get("company", "company")) or source.employer
         if metadata:
             sections.append("\n公开接口原始记录：\n" + json_text(metadata))
@@ -401,6 +505,7 @@ class Fetcher:
             employer_hint=employer,
             source_id=source.id,
             attachments=attachments,
+            structured=structured,
         )
 
 

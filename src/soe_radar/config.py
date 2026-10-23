@@ -98,6 +98,13 @@ def load_settings(path: Path | None = None) -> Settings:
 def merge(base: dict, override: dict) -> dict:
     result = dict(base)
     for key, value in override.items():
+        if key in ("sources", "providers") and isinstance(value, list) and value:
+            identity = "id" if key == "sources" else "name"
+            entries = {e[identity]: dict(e) for e in result.get(key, [])}
+            for entry in value:
+                entries[entry[identity]] = merge(entries.get(entry[identity], {}), entry)
+            result[key] = list(entries.values())
+            continue
         result[key] = (
             merge(result[key], value)
             if isinstance(value, dict) and isinstance(result.get(key), dict)

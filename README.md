@@ -42,7 +42,7 @@ uv run soe-radar doctor --live
 
 ## 配置自己的模型
 
-`init` 生成 `config/local.yaml`。这是个人配置，不提交 Git。修改后重启服务。可通过 `SOE_RADAR_CONFIG` 或全局 `--config PATH` 指定其他配置。
+`init` 生成只含个人覆盖项的 `config/local.yaml`，未填写部分继承仓库默认值。来源按 `id`、供应商按 `name` 合并；设置空列表可关闭全部对应项。这是个人配置，不提交 Git。修改后重启服务。可通过 `SOE_RADAR_CONFIG` 或全局 `--config PATH` 指定其他配置。
 
 `llm.providers` 按列表顺序尝试，每个供应商声明协议、模型、费用类型和凭证环境变量。默认只允许配置中确认免费的 OpenCode 模型；默认不会调用收费模型或本机 Codex。默认模型名称和接口来自 [OpenCode 官方模型文档](https://opencode.ai/v2/docs/console/models/)，免费政策可能变化。
 
@@ -65,7 +65,16 @@ uv run soe-radar doctor --reset-provider opencode
 
 可选本机 `gpt-6-luna`：先自行安装并登录 Codex，然后在 `config/local.yaml` 中将 `codex-local.enabled` 改成 `true`。这会使用个人现有 Codex 额度，**默认关闭**。本机入口已用合成样例验证，不能据此宣称复杂公告的准确率。
 
-可选付费 API：同时启用对应供应商、`allow_paid` 和大于零的预算，配置正数单价。程序在请求前预留预算；费用不明确的模型不会发送请求。供应商列表覆盖时需要保留所有想使用的供应商配置。
+例如，启用本机模式的个人覆盖配置为：
+
+```yaml
+llm:
+  providers:
+    - name: codex-local
+      enabled: true
+```
+
+其余属性继承默认值。可选付费 API 需同时启用对应供应商、`allow_paid` 和大于零的预算，配置正数单价。程序在请求前预留预算；费用不明确的模型不会发送请求。自定义供应商需填写完整协议、模型及费用配置。
 
 ## 采集方式与来源
 
@@ -98,6 +107,8 @@ employers:
     industry: 金融
 ```
 
+人工确认子公司时也可在审核表单选择母集团并提交关系依据链接。
+
 上面的名称仅示意配置格式，使用时替换为实际企业及其隶属关系证明。系统不会仅凭名称相似就认定国企或自动推断母子公司。
 
 ## 跨年度使用
@@ -121,6 +132,20 @@ uv run soe-radar observe
 
 `observe` 汇总真实运行日期及失败情况。七天观察尚需时间积累；达到七个日期也不代表所有来源稳定。不要把一次短时运行当成七天验收。
 
+## 审核与数据修复
+
+待核验列表优先显示近期届别，往届可展开；行内可以排除线索，来源页面可以单独重试。人工排除不会被后续同步撤销；人工确认后的原文发生变化时保留旧结论、标记待复核，并停止导出不确定的截止。
+
+核验默认读取最新原文，也可明确选择已保存的版本。海报/扫描 PDF 可以填写附件转录和页码/位置；缺少年份时补充发布日期及依据；纠正日期冲突需填写说明。原文不被改写，审核内容单独保存。快照核验不代表官网当前仍开放；CSV 导入不算官方快照，仍需先读取官方公告。
+
+```bash
+# 停止本地服务后预览修复；应用时自动备份、保留被合并记录并离线重解析
+uv run soe-radar repair
+uv run soe-radar repair --apply
+```
+
+修复不会跨届合并。原始证据、关注、已投、备注和审核历史会保留；离线解析不调用模型，不把旧原文的获取时间改成今天。修复明细保存在个人 `data/repair-report.json`。
+
 ## 人工标注与验收
 
 ```bash
@@ -129,7 +154,7 @@ uv run soe-radar dataset export data/labels-to-review.jsonl
 uv run soe-radar dataset evaluate data/labels-reviewed.jsonl
 ```
 
-要求 100 份开发集、50 份人工标注留出集。`expected` 示例：`{"kind":"date","value":"2026-10-31","clear":true}`；未公布为 `{"kind":"unannounced","value":null}`。工具不会自动把解析输出填成真值。
+要求 100 份开发集、50 份人工标注留出集。`expected` 示例：`{"kind":"date","value":"2026-10-31","clear":true}`；未公布为 `{"kind":"unannounced","value":null}`。工具不会自动把解析输出填成真值。导出按活动分组、保留当前版本；评估会拒绝重复标注和同组跨开发/留出集的泄漏。
 
 当前自动化测试主要使用明确标注的合成样例和模拟网络，不是 150 份人工真值，也不能用来声称达到 98% 的真实数据精确率。评估命令只报告规则解析器指标，端到端发布需要另外核对。
 
@@ -147,3 +172,5 @@ CI 使用离线样例，不调用真实模型或招聘站点。HTTP 接口及请
 实现以 [MIT 许可证](LICENSE) 发布。招聘内容是第三方公开信息，其性质与软件代码许可分别判断。
 
 前期调研：[GitHub 项目](docs/research/2026-10-22-github-survey.md)、[飞书表格参考](docs/research/2026-10-22-feishu-reference.md)。
+
+本轮诊断修复的实测与剩余限制见 [修复记录](docs/implementation/2026-10-23-review-fixes.md)。

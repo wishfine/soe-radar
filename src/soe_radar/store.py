@@ -20,6 +20,7 @@ from .models import (
     JobPosting,
     Opportunity,
     PersonalState,
+    ReviewRecord,
     stamp,
 )
 from .schemas import DocumentInput, ExtractionResult, local_now
@@ -33,6 +34,7 @@ def digest_document(doc: DocumentInput) -> str:
         "published_at": str(doc.published_at),
         "attachments": doc.attachments,
         "employer": doc.employer_hint,
+        "structured": doc.structured,
     }
     return hashlib.sha256(json.dumps(data, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
@@ -60,6 +62,17 @@ def _event_target(s, result: ExtractionResult, employer: Employer):
     return matches[0] if len(matches) == 1 else None
 
 
+def documents_for(s, opportunity):
+    ids = set(s.scalars(select(Deadline.document_id).where(Deadline.opportunity_id == opportunity.id)))
+    return list(
+        s.scalars(
+            select(Document)
+            .where((Document.opportunity_id == opportunity.id) | Document.id.in_(ids))
+            .order_by(Document.fetched_at.desc())
+        )
+    )
+
+
 def ingest(
     db: Database,
     cfg: Settings,
@@ -69,6 +82,9 @@ def ingest(
     manual=False,
     proof_url="",
     target_id: str | None = None,
+    review=None,
+    record_id: str | None = None,
+    excluded=False,
 ) -> dict:
     url = canonical(doc.url)
     source = next((x for x in cfg.sources if x.id == doc.source_id), None)
@@ -111,7 +127,25 @@ def ingest(
             version.snapshot_path = str(path.relative_to(cfg.data_dir))
         version.extraction = result.model_dump(mode="json")
         version.parser_version = PARSER_VERSION
-        reasons = validate_extraction(result, doc)
+        validation_doc = (
+            doc.model_copy(update={"published_at": review.published_at})
+            if review and review.published_at
+            else doc
+        )
+        reasons = validate_extraction(
+            result,
+            validation_doc,
+            manual=manual,
+            evidence=review.evidence if review else (),
+            resolution_note=review.resolution_note if review else "",
+        )
+        if (
+            review
+            and review.published_at
+            and review.published_at != doc.published_at
+            and not review.publication_evidence.strip()
+        ):
+            reasons.append("补充发布日期需要填写年份依据")
         public_institution = bool(re.search(r"(?:事业单位|事业编制|事业编)", doc.title + doc.text))
         if public_institution:
             reasons.append("原文涉及事业单位或事业编制，不能自动归为国有企业")
@@ -149,6 +183,19 @@ def ingest(
             employer.proof_url = public_url(proof_url)
             employer.org_type = "soe"
             employer.verified_at = stamp()
+        if manual and review and review.parent_employer_id:
+            parent = s.get(Employer, review.parent_employer_id)
+            if not parent or parent.id == employer.id or not review.relationship_proof_url:
+                raise ValueError("集团关联需要有效母公司和关系证据地址")
+            public_url(review.relationship_proof_url)
+            ancestor = parent
+            visited = {employer.id}
+            while ancestor:
+                if ancestor.id in visited:
+                    raise ValueError("集团关联不能形成循环")
+                visited.add(ancestor.id)
+                ancestor = s.get(Employer, ancestor.parent_id) if ancestor.parent_id else None
+            employer.parent_id = parent.id
         if employer.org_type != "soe" or not employer.proof_url:
             reasons.append("企业国有性质缺少核验依据")
         if (
@@ -176,6 +223,36 @@ def ingest(
         identity = hashlib.sha256(json.dumps(identity_data, ensure_ascii=False).encode()).hexdigest()
         activity = s.scalar(select(Activity).where(Activity.identity == identity))
         target = None
+        anchor = None
+        if result.action == "recruitment":
+            candidates = list(s.scalars(select(Opportunity).where(Opportunity.merged_into_id.is_(None))))
+            if record_id:
+                candidates.sort(key=lambda x: x.id != record_id)
+            elif version.opportunity_id:
+                candidates.sort(key=lambda x: x.id != version.opportunity_id)
+            for previous in candidates:
+                if canonical(previous.official_url) != url and previous.id != record_id:
+                    continue
+                if previous.cohorts and result.cohorts and set(previous.cohorts) != set(result.cohorts):
+                    continue
+                if (
+                    not (previous.cohorts and result.cohorts)
+                    and previous.published_at
+                    and doc.published_at
+                    and previous.published_at[:4] != str(doc.published_at.year)
+                ):
+                    continue
+                if previous.id != record_id and (
+                    s.get(Batch, previous.batch_id).name != result.batch
+                    or previous.scope != result.deadline.scope
+                    or previous.season
+                    and result.season
+                    and {"春季": "春招", "秋季": "秋招"}.get(previous.season, previous.season)
+                    != result.season
+                ):
+                    continue
+                anchor = previous
+                break
         if result.action != "recruitment":
             if target_id:
                 target = s.get(Opportunity, target_id)
@@ -189,9 +266,10 @@ def ingest(
                 target = _event_target(s, result, employer)
             if not target:
                 reasons.append("变更公告尚未唯一关联原招聘活动")
-        if target:
-            activity = s.get(Activity, target.activity_id)
-            batch = s.get(Batch, target.batch_id)
+        if target or anchor:
+            existing = target or anchor
+            activity = s.get(Activity, existing.activity_id)
+            batch = s.get(Batch, existing.batch_id)
         else:
             if not activity:
                 activity = Activity(
@@ -210,9 +288,13 @@ def ingest(
                 batch = Batch(activity_id=activity.id, name=result.batch)
                 s.add(batch)
                 s.flush()
-        opportunity = target or s.scalar(
-            select(Opportunity).where(
-                Opportunity.batch_id == batch.id, Opportunity.scope == result.deadline.scope
+        opportunity = (
+            target
+            or anchor
+            or s.scalar(
+                select(Opportunity).where(
+                    Opportunity.batch_id == batch.id, Opportunity.scope == result.deadline.scope
+                )
             )
         )
         if not opportunity:
@@ -227,6 +309,30 @@ def ingest(
             )
             s.add(opportunity)
             s.flush()
+        if manual and record_id == opportunity.id:
+            if s.scalar(
+                select(Opportunity).where(
+                    Opportunity.batch_id == batch.id,
+                    Opportunity.scope == result.deadline.scope,
+                    Opportunity.id != opportunity.id,
+                )
+            ):
+                raise ValueError("同批次的目标适用对象已经存在，请选择已有记录")
+            opportunity.scope = result.deadline.scope
+        if not manual and opportunity.review_status in ("manual", "rejected"):
+            previous_versions = list(
+                s.scalars(
+                    select(Document.id).where(
+                        Document.opportunity_id == opportunity.id, Document.id != version.id
+                    )
+                )
+            )
+            version.opportunity_id = opportunity.id
+            version.parse_state = "rejected" if opportunity.review_status == "rejected" else "manual_change"
+            if opportunity.review_status == "manual" and previous_versions:
+                opportunity.needs_review = True
+                opportunity.review_reasons = ["原文已更新，保留原人工结论并等待重新核验"]
+            return serialize(s, opportunity, cfg)
         old_claim = (
             s.get(Deadline, opportunity.latest_deadline_id) if opportunity.latest_deadline_id else None
         )
@@ -239,7 +345,16 @@ def ingest(
         ):
             reasons.append("不同公告提供了不同截止，需人工确认其关系")
         reasons = list(dict.fromkeys(reasons))
-        opportunity.review_status = "pending" if reasons else ("manual" if manual else "auto")
+        if manual and reasons:
+            raise ValueError("；".join(reasons))
+        opportunity.review_status = (
+            "excluded" if excluded else "pending" if reasons else ("manual" if manual else "auto")
+        )
+        opportunity.needs_review = False
+        opportunity.employer_id = employer.id
+        if result.action == "recruitment":
+            opportunity.title = result.title or doc.title
+            opportunity.official_url = url
         opportunity.review_reasons = reasons
         opportunity.cohorts = result.cohorts
         opportunity.season = result.season
@@ -256,7 +371,7 @@ def ingest(
             result.apply_url if result.apply_url.startswith(("http://", "https://")) else ""
         )
         opportunity.extraction = result.model_dump(mode="json")
-        opportunity.published_at = str(doc.published_at) if doc.published_at else None
+        opportunity.published_at = str(validation_doc.published_at) if validation_doc.published_at else None
         opportunity.last_checked = stamp()
         opportunity.updated_at = stamp()
         verification = "manual" if manual else "auto"
@@ -268,7 +383,7 @@ def ingest(
         )
         s.add(claim)
         s.flush()
-        if (not reasons or not old_claim) and not (result.action == "close" and old_claim):
+        if (not reasons or not old_claim or target is None) and not (result.action == "close" and old_claim):
             opportunity.latest_deadline_id = claim.id
         if not reasons:
             opportunity.lifecycle = (
@@ -309,7 +424,20 @@ def ingest(
             if old_claim:
                 opportunity.sequence += 1
         version.opportunity_id = opportunity.id
-        version.parse_state = "done" if not reasons else "review"
+        version.parse_state = "excluded" if excluded else "done" if not reasons else "review"
+        if manual:
+            s.add(
+                ReviewRecord(
+                    opportunity_id=opportunity.id,
+                    document_id=version.id,
+                    decision="approve",
+                    payload=review.model_dump(mode="json")
+                    if review
+                    else {"extraction": result.model_dump(mode="json")},
+                )
+            )
+            if review and review.use_snapshot:
+                opportunity.last_checked = version.fetched_at
         s.flush()
         # Independent scoped deadlines become linked opportunities, not copies across cohorts.
         if result.scoped_deadlines and not reasons:
@@ -407,20 +535,31 @@ def serialize(s, opportunity: Opportunity, cfg: Settings, *, detail=False) -> di
             expired = day < now.date()
         if expired:
             value["status"] = "closed"
+        if claim.kind == "datetime" and re.search(r"24\s*(?:[:：]00|点|时)", claim.quote):
+            dt = datetime.fromisoformat(claim.value)
+            if dt.hour == 0 and dt.minute == 0:
+                from datetime import timedelta
+
+                day = dt.date() - timedelta(days=1)
+                value["deadline_display"] = f"{day.isoformat()} 24:00（当日结束）"
+                value["days_left"] = (day - now.date()).days
     checked = datetime.fromisoformat(opportunity.last_checked)
     value["data_stale"] = (now - checked).total_seconds() > 48 * 3600
+    value["data_stale"] = value["data_stale"] or opportunity.needs_review
     if detail:
+        value["reviews"] = [
+            {c.name: getattr(r, c.name) for c in ReviewRecord.__table__.columns}
+            for r in s.scalars(
+                select(ReviewRecord)
+                .where(ReviewRecord.opportunity_id == opportunity.id)
+                .order_by(ReviewRecord.created_at.desc())
+            )
+        ]
         value["jobs"] = [
             {c.name: getattr(job, c.name) for c in JobPosting.__table__.columns}
             for job in s.scalars(select(JobPosting).where(JobPosting.opportunity_id == opportunity.id))
         ]
-        docs = list(
-            s.scalars(
-                select(Document)
-                .where(Document.opportunity_id == opportunity.id)
-                .order_by(Document.fetched_at.desc())
-            )
-        )
+        docs = documents_for(s, opportunity)
         # A child scope shares its parent document via the deadline relationship.
         if claim and all(x.id != claim.document_id for x in docs):
             attached = s.get(Document, claim.document_id)

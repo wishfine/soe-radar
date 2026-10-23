@@ -82,3 +82,32 @@ def test_restore_refuses_active_worker_and_serve_refuses_live_pid(tmp_path, monk
     assert result.exit_code != 0
     assert "租约" in result.output
     db.engine.dispose()
+
+
+def test_init_writes_only_personal_overrides_and_named_source_patches_inherit_defaults(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SOE_RADAR_CONFIG", raising=False)
+    assert runner.invoke(app, ["init"]).exit_code == 0
+    config = tmp_path / "config/local.yaml"
+    assert len(config.read_text()) < 200
+    config.write_text(
+        "sources:\n  - id: ncss\n    enabled: false\nllm:\n  providers:\n    - name: codex-local\n      enabled: true\n"
+    )
+    settings = load_settings()
+    assert len(settings.sources) == 10
+    assert not next(x for x in settings.sources if x.id == "ncss").enabled
+    assert next(x for x in settings.sources if x.id == "ncss").api_fields["published"] == "publishDate"
+    assert next(x for x in settings.llm.providers if x.name == "codex-local").protocol == "codex_cli"
+
+
+def test_repair_refuses_existing_sync_lease(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SOE_RADAR_CONFIG", raising=False)
+    assert runner.invoke(app, ["init"]).exit_code == 0
+    db = initialize(load_settings())
+    db.acquire("sync", "another-worker")
+    result = runner.invoke(app, ["repair", "--apply"])
+    assert result.exit_code != 0
+    assert "租约" in result.output
+    db.release("sync", "another-worker")
+    db.engine.dispose()

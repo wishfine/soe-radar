@@ -1359,3 +1359,6 @@ h1 em {
     transition:none!important
   }
 }
+.review-form .full { grid-column: 1 / -1; }
+.review-form input[type="checkbox"] { width: auto; min-height: auto; margin-right: 6px; }
+.source-card .button { margin-top: 12px; }

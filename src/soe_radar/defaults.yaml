@@ -80,7 +80,7 @@ sources:
     policy: registry_required
     adapter: json
     api_items_path: data.list
-    api_fields: {title: jobName, url: jobId, company: recName}
+    api_fields: {title: jobName, url: jobId, company: recName, published: publishDate, location: areaCodeName, education: degreeName, major: major, type: recruitType}
     api_url_template: https://www.ncss.cn/student/jobs/{id}/detail.html
     api_next_param: offset
     api_required_fields: {recProperty: 国有企业}
@@ -108,6 +108,8 @@ sources:
     url: https://www.chinaunicom.com.cn/46/menu01/528/column06
     domains: [chinaunicom.com.cn, chinaunicom.cn]
     industry: 通信
+    adapter: nuxt
+    entry_is_document: true
   - id: cnpc
     name: 中国石油
     employer: 中国石油天然气集团有限公司

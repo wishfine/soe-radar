@@ -19,7 +19,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .config import Settings, load_settings
 from .db import initialize
 from .exports import csv_export, ics_export
-from .extraction import extract_rules, validate_extraction
+from .extraction import extract_rules
 from .fetching import Fetcher
 from .imports import import_csv
 from .models import (
@@ -31,6 +31,7 @@ from .models import (
     Opportunity,
     PersonalState,
     ProviderState,
+    ReviewRecord,
     SourceState,
     stamp,
 )
@@ -43,13 +44,38 @@ from .urls import on_domains, public_url
 ROOT = Path(__file__).parent
 
 
+def archived_pending(row):
+    from .schemas import local_now
+
+    year = local_now().year
+    return bool(
+        row["cohorts"]
+        and max(row["cohorts"]) < year
+        or not row["cohorts"]
+        and row["published_at"]
+        and row["published_at"][:4] < str(year - 1)
+    )
+
+
 def query_rows(db, cfg, params, *, paginate=True):
     with db.session() as s:
-        rows = [serialize(s, record, cfg) for record in s.scalars(select(Opportunity))]
+        rows = [
+            serialize(s, record, cfg)
+            for record in s.scalars(select(Opportunity).where(Opportunity.merged_into_id.is_(None)))
+        ]
+        hidden_old = 0
         if params.get("review") == "pending":
-            rows = [r for r in rows if r["review_status"] == "pending"]
+            rows = [r for r in rows if r["review_status"] == "pending" or r["needs_review"]]
+            if params.get("include_old") != "1":
+                hidden_old = sum(archived_pending(r) for r in rows)
+                rows = [r for r in rows if not archived_pending(r)]
         elif params.get("review") != "all":
-            rows = [r for r in rows if r["review_status"] in ("auto", "manual")]
+            rows = [
+                r
+                for r in rows
+                if r["review_status"] in ("auto", "manual")
+                and (not r["needs_review"] or params.get("history") == "1")
+            ]
         q = params.get("q", "").lower().strip()
         if q:
             rows = [
@@ -137,6 +163,22 @@ def query_rows(db, cfg, params, *, paginate=True):
                 -datetime.fromisoformat(r["first_seen"]).timestamp(),
             )
         )
+        if params.get("review") == "pending":
+            from .schemas import local_now
+
+            target = local_now().year + 1
+            rows.sort(
+                key=lambda r: (
+                    0 if target in r["cohorts"] else 1 if not r["cohorts"] else 2,
+                    -int((r["published_at"] or r["first_seen"][:10]).replace("-", "")),
+                    -datetime.fromisoformat(r["first_seen"]).timestamp(),
+                )
+            )
+        elif params.get("history") == "1":
+            rows.sort(
+                key=lambda r: (r["deadline"] or {}).get("value") or r["published_at"] or r["first_seen"],
+                reverse=True,
+            )
         total = len(rows)
         try:
             page, size = (
@@ -150,6 +192,7 @@ def query_rows(db, cfg, params, *, paginate=True):
             "total": total,
             "page": page,
             "page_size": size,
+            "hidden_old": hidden_old,
         }
 
 
@@ -260,23 +303,45 @@ def create_app(cfg: Settings | None = None, *, scheduling=True):
             sources = []
             for source in cfg.sources:
                 state = states.get(source.id)
+                campus = list(
+                    s.scalars(
+                        select(Opportunity).where(
+                            Opportunity.source_id == source.id,
+                            Opportunity.recruitment_type == "campus",
+                            Opportunity.review_status.in_(["auto", "manual", "pending"]),
+                            Opportunity.merged_into_id.is_(None),
+                        )
+                    )
+                )
                 sources.append(
                     {
                         "id": source.id,
                         "name": source.name,
                         "url": source.url,
                         "enabled": source.enabled,
-                        "status": state.status if state else "unverified",
+                        "status": "no_recruitment"
+                        if state and state.status in ("success", "partial") and not campus
+                        else state.status
+                        if state
+                        else "unverified",
                         "last_success": state.last_success if state else None,
                         "last_error": state.last_error if state else "",
                         "last_count": state.last_count if state else 0,
                         "failures": state.failures if state else 0,
                         "cursor": state.cursor if state else {},
+                        "campus_count": len(campus),
+                        "verified_count": sum(
+                            x.review_status in ("auto", "manual") and not x.needs_review for x in campus
+                        ),
+                        "usable": bool(
+                            source.enabled and state and state.status in ("success", "partial") and campus
+                        ),
                     }
                 )
             paused = {
                 x.name: {"reason": x.reason, "until": x.paused_until}
                 for x in s.scalars(select(ProviderState))
+                if x.paused_until and x.paused_until > stamp()
             }
             providers = [
                 {
@@ -311,11 +376,22 @@ def create_app(cfg: Settings | None = None, *, scheduling=True):
     @app.get("/api/stats")
     async def stats():
         all_rows = query_rows(db, cfg, {"review": "all", "history": "1"}, paginate=False)["items"]
-        verified = [r for r in all_rows if r["review_status"] in ("auto", "manual") and r["status"] == "open"]
+        verified = [
+            r
+            for r in all_rows
+            if r["review_status"] in ("auto", "manual") and not r["needs_review"] and r["status"] == "open"
+        ]
         return {
             "active": len(verified),
             "due_soon": sum(r["days_left"] is not None and 0 <= r["days_left"] <= 7 for r in verified),
-            "pending": sum(r["review_status"] == "pending" for r in all_rows),
+            "pending": sum(
+                (r["review_status"] == "pending" or r["needs_review"]) and not archived_pending(r)
+                for r in all_rows
+            ),
+            "archived_pending": sum(
+                (r["review_status"] == "pending" or r["needs_review"]) and archived_pending(r)
+                for r in all_rows
+            ),
             "saved": sum(r["personal"]["saved"] for r in all_rows),
             "cohorts": sorted({y for r in all_rows for y in r["cohorts"]}, reverse=True),
             "industries": sorted({r["industry"] for r in all_rows}),
@@ -337,20 +413,39 @@ def create_app(cfg: Settings | None = None, *, scheduling=True):
         except (ValueError, UnicodeError) as exc:
             raise HTTPException(422, str(exc))
 
+    @app.get("/api/employers")
+    async def employers():
+        with db.session() as s:
+            return [
+                {"id": e.id, "name": e.name, "parent_id": e.parent_id}
+                for e in s.scalars(select(Employer).order_by(Employer.name))
+            ]
+
     @app.post("/api/reviews/{opportunity_id}")
     async def review(opportunity_id: str, body: ReviewInput):
         with db.session() as s:
             row = s.get(Opportunity, opportunity_id)
             if not row:
                 raise HTTPException(404, "未找到招聘记录")
+            if row.merged_into_id:
+                row = s.get(Opportunity, row.merged_into_id)
             if body.decision == "reject":
                 row.review_status = "rejected"
+                row.needs_review = False
+                s.add(
+                    ReviewRecord(
+                        opportunity_id=row.id, decision="reject", payload=body.model_dump(mode="json")
+                    )
+                )
+                for doc in s.scalars(select(Document).where(Document.opportunity_id == row.id)):
+                    doc.parse_state = "rejected"
                 return {"id": row.id, "review_status": "rejected"}
-            version = s.scalar(
-                select(Document).where(Document.opportunity_id == row.id).order_by(Document.fetched_at.desc())
-            )
+            from .store import documents_for
+
+            versions = documents_for(s, row)
+            version = next((d for d in versions if not body.snapshot_id or d.id == body.snapshot_id), None)
             old_url, old_title = row.official_url, row.title
-            if not version:
+            if not version and body.use_snapshot:
                 raise HTTPException(422, "缺少原文版本")
         url = body.official_url or old_url
         try:
@@ -360,15 +455,21 @@ def create_app(cfg: Settings | None = None, *, scheduling=True):
                 if not body.employer_proof_url:
                     raise ValueError("请填写企业性质证据链接")
                 source = SourceSpec(id="manual", name="人工核验", url=url, domains=[urlsplit(url).hostname])
-            fetcher = Fetcher(cfg)
-            try:
-                doc = await fetcher.document(url, source, old_title)
-            finally:
-                await fetcher.close()
+            if body.use_snapshot:
+                if version.source_id == "import":
+                    raise ValueError("导入表格不是官方快照，请先在线读取公告原文")
+                if url != old_url:
+                    raise ValueError("使用已保存快照时不能替换公告地址")
+                from .maintenance import saved_input
+
+                doc = saved_input(version, cfg)
+            else:
+                fetcher = Fetcher(cfg)
+                try:
+                    doc = await fetcher.document(url, source, old_title)
+                finally:
+                    await fetcher.close()
             extracted = body.extraction or extract_rules(doc)
-            errors = validate_extraction(extracted, doc)
-            if errors:
-                raise ValueError("；".join(errors))
             result = ingest(
                 db,
                 cfg,
@@ -377,6 +478,8 @@ def create_app(cfg: Settings | None = None, *, scheduling=True):
                 manual=True,
                 proof_url=body.employer_proof_url or "",
                 target_id=body.target_opportunity_id,
+                record_id=row.id,
+                review=body,
             )
             if result["review_status"] == "pending":
                 raise ValueError("；".join(result["review_reasons"]))
@@ -388,7 +491,11 @@ def create_app(cfg: Settings | None = None, *, scheduling=True):
             return result
         except Exception as exc:
             # Avoid forwarding network response bodies or credentials to the browser.
-            message = str(exc) if isinstance(exc, ValueError) else f"原文读取失败：{type(exc).__name__}"
+            message = (
+                str(exc)
+                if isinstance(exc, ValueError)
+                else f"原文读取失败：{type(exc).__name__}。可勾选已保存版本进行快照核验。"
+            )
             raise HTTPException(422, message)
 
     @app.get("/exports/deadlines.ics")

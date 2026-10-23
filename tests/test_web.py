@@ -119,6 +119,78 @@ def test_reject_pending_record(client):
     assert client.get("/api/opportunities?review=pending").json()["total"] == 0
 
 
+def test_snapshot_review_records_attachment_transcription_and_year_basis(client):
+    from soe_radar.schemas import Claim
+
+    doc = DocumentInput(
+        url="https://www.boc.cn/poster",
+        title="中国银行2035届校园招聘",
+        text="招聘公告请见海报。",
+        source_id="boc",
+        employer_hint="中国银行股份有限公司",
+        attachments=[{"url": "https://www.boc.cn/poster.png", "status": "needs_review"}],
+    )
+    result = extract_rules(doc)
+    row = ingest(client.app.state.db, client.app.state.cfg, doc, result)
+    result.deadline = Claim(kind="date", value="2035-10-31", quote="面向2035届，报名截止10月31日")
+    result.review_reasons = []
+    response = client.post(
+        "/api/reviews/" + row["id"],
+        json={
+            "decision": "approve",
+            "use_snapshot": True,
+            "published_at": "2035-09-01",
+            "publication_evidence": "海报右上角注明2035年9月发布",
+            "extraction": result.model_dump(mode="json"),
+            "evidence": [
+                {
+                    "attachment_url": "https://www.boc.cn/poster.png",
+                    "location": "海报下方报名时间",
+                    "quote": result.deadline.quote,
+                }
+            ],
+            "resolution_note": "已逐字核对海报日期与届别",
+        },
+        headers=auth(client),
+    )
+    assert response.status_code == 200, response.text
+    detail = client.get("/api/opportunities/" + row["id"]).json()
+    assert detail["review_status"] == "manual"
+    assert detail["documents"][0]["text"] == doc.text
+    assert detail["reviews"][0]["payload"]["evidence"][0]["location"] == "海报下方报名时间"
+
+
+def test_reject_and_manual_decisions_survive_new_document_versions(client):
+    row = add_record(client, status="pending")
+    client.post("/api/reviews/" + row["id"], json={"decision": "reject"}, headers=auth(client))
+    import asyncio
+
+    from sqlalchemy import select
+
+    from soe_radar.models import Document, Opportunity
+    from soe_radar.sync import Pipeline
+
+    with client.app.state.db.session() as s:
+        stored = s.scalar(select(Document).where(Document.opportunity_id == row["id"]))
+        doc = DocumentInput(
+            url=stored.url,
+            title=stored.title,
+            text=stored.text + "欢迎报名。",
+            published_at=stored.published_at,
+            source_id=stored.source_id,
+            employer_hint="中国银行股份有限公司",
+        )
+
+    async def process():
+        pipe = Pipeline(client.app.state.cfg, client.app.state.db)
+        await pipe.process(doc)
+        await pipe.close()
+
+    asyncio.run(process())
+    with client.app.state.db.session() as s:
+        assert s.get(Opportunity, row["id"]).review_status == "rejected"
+
+
 def test_manual_review_refetches_official_evidence_and_preserves_personal_state(client, monkeypatch):
     from sqlalchemy import select
 
@@ -188,3 +260,27 @@ def test_bad_query_and_formula_export(client):
 
     row["title"] = '=HYPERLINK("https://evil.example")'
     assert "'=HYPERLINK" in csv_export([row]).decode("utf-8-sig")
+
+
+def test_manually_confirmed_record_is_flagged_for_review_when_source_changes(client):
+    record = add_record(client)
+    from sqlalchemy import select
+
+    from soe_radar.models import Document, Opportunity
+
+    with client.app.state.db.session() as s:
+        s.get(Opportunity, record["id"]).review_status = "manual"
+        version = s.scalar(select(Document))
+        doc = DocumentInput(
+            url=version.url,
+            title=version.title,
+            text=version.text.replace("12月31日", "11月30日"),
+            published_at=version.published_at,
+            source_id="boc",
+            employer_hint="中国银行股份有限公司",
+        )
+    result = ingest(client.app.state.db, client.app.state.cfg, doc, extract_rules(doc))
+    assert result["review_status"] == "manual" and result["needs_review"]
+    assert result["deadline"]["value"] == "2035-12-31"
+    assert client.get("/api/opportunities").json()["total"] == 0
+    assert client.get("/api/opportunities?review=pending").json()["total"] == 1

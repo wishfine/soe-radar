@@ -7,7 +7,7 @@ import re
 from datetime import UTC, datetime
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 
 from .config import Settings
 from .db import Database
@@ -21,15 +21,16 @@ from .urls import canonical, on_domains
 
 
 class Pipeline:
-    def __init__(self, cfg: Settings, db: Database, *, fetcher=None, extractor=None):
+    def __init__(self, cfg: Settings, db: Database, *, fetcher=None, extractor=None, use_models=True):
         self.cfg, self.db = cfg, db
         self.fetcher = fetcher or Fetcher(cfg)
         self.extractor = extractor or Extractor(cfg, db)
+        self.use_models = use_models
 
     async def close(self):
         await self.fetcher.close()
 
-    async def process(self, doc: DocumentInput):
+    async def process(self, doc: DocumentInput, *, live=True):
         digest = digest_document(doc)
         with self.db.session() as s:
             cached = s.scalar(
@@ -40,79 +41,49 @@ class Pipeline:
                 and cached.parser_version == PARSER_VERSION
                 and cached.parse_state in ("done", "excluded")
             ):
-                if cached.opportunity_id:
+                if cached.opportunity_id and live:
                     s.get(Opportunity, cached.opportunity_id).last_checked = stamp()
                 for child in s.scalars(
                     select(Opportunity)
                     .join(Deadline, Opportunity.latest_deadline_id == Deadline.id)
                     .where(Deadline.document_id == cached.id)
                 ):
-                    child.last_checked = stamp()
-                cached.fetched_at = stamp()
+                    if live:
+                        child.last_checked = stamp()
                 return {"cached": True, "excluded": cached.parse_state == "excluded"}
         result = extract_rules(doc)
+        if doc.source_id == "import":
+            return ingest(self.db, self.cfg, doc, result)
         if result.recruitment_type in ("social", "internal", "postdoc", "intern", "notice"):
-            with self.db.session() as s:
-                existing = s.scalar(
-                    select(Document).where(Document.url == canonical(doc.url), Document.digest == digest)
-                )
-                if not existing:
-                    s.add(
-                        Document(
-                            url=canonical(doc.url),
-                            digest=digest,
-                            source_id=doc.source_id,
-                            title=doc.title,
-                            text=doc.text,
-                            published_at=str(doc.published_at) if doc.published_at else None,
-                            attachments=doc.attachments,
-                            extraction=result.model_dump(mode="json"),
-                            parser_version=PARSER_VERSION,
-                            parse_state="excluded",
-                        )
-                    )
-                else:
-                    existing.parse_state = "excluded"
-                    existing.parser_version = PARSER_VERSION
-                prior = (
-                    s.scalars(
-                        select(Opportunity)
-                        .join(Document, Document.opportunity_id == Opportunity.id)
-                        .where(Document.url == canonical(doc.url), Opportunity.title == doc.title)
-                    )
-                    .unique()
-                    .all()
-                )
-                for opportunity in prior:
-                    if opportunity.review_status != "manual":
-                        opportunity.review_status = "excluded"
-            return {"excluded": True}
+            saved = ingest(self.db, self.cfg, doc, result, excluded=True)
+            return {"excluded": True, "id": saved["id"]}
         model_pending = False
         if validate_extraction(result, doc):
             try:
+                if not self.use_models:
+                    raise ModelUnavailable("离线重解析未调用模型")
                 enriched = await self.extractor.extract(doc)
-                # Rules retain a known explicit deadline if a model omitted it.
-                if not enriched.deadline.value and result.deadline.value:
-                    enriched.deadline = result.deadline
                 if not enriched.cohorts:
                     enriched.cohorts = result.cohorts
                 if not enriched.employer:
                     enriched.employer = result.employer
-                if not enriched.title:
-                    enriched.title = doc.title
+                enriched.title = doc.title
                 result = enriched
             except ModelUnavailable as exc:
                 model_pending = True
                 result.review_reasons.append("模型待解析：" + str(exc))
         for attachment in doc.attachments:
-            if attachment.get("status") in ("failed", "needs_ocr", "needs_review"):
+            required = not result.deadline.value and result.deadline.kind not in ("rolling", "long_term")
+            required = required or attachment.get("deadline_relevant", False)
+            if required and attachment.get("status") in ("failed", "needs_ocr", "needs_review"):
                 result.review_reasons.append("附件尚未完整解析：" + attachment.get("label", "附件"))
         saved = ingest(self.db, self.cfg, doc, result)
-        if model_pending:
-            with self.db.session() as s:
-                version = s.scalar(
-                    select(Document).where(Document.url == canonical(doc.url), Document.digest == digest)
-                )
+        with self.db.session() as s:
+            version = s.scalar(
+                select(Document).where(Document.url == canonical(doc.url), Document.digest == digest)
+            )
+            version.parse_attempt_at = stamp()
+            if model_pending and version.parse_state not in ("rejected", "manual_change"):
                 version.parse_state = "pending_model"
         return saved
 
@@ -147,6 +118,7 @@ class Pipeline:
             state.last_attempt = stamp()
             cursor = dict(state.cursor or {})
         backlog = [(x[0], x[1]) for x in cursor.get("backlog", [])]
+        self.fetcher.api_metadata.update(cursor.get("metadata", {}))
         pages = [source.url]
         if cursor.get("next_page") and cursor["next_page"] != source.url:
             pages.append(cursor["next_page"])
@@ -183,7 +155,11 @@ class Pipeline:
                     errors.append(reason + ("；备用入口也未取得有效内容" if source.fallback_urls else ""))
                     continue
             try:
-                candidates = self.fetcher.candidates(page, source)
+                candidates = (
+                    [(page.url, page.title)]
+                    if source.entry_is_document
+                    else self.fetcher.candidates(page, source)
+                )
                 if not candidates and page.via != "api":
                     raise FetchFailure("未发现有效公告链接，可能为动态页或来源改版")
                 list_valid = list_valid or bool(candidates)
@@ -243,6 +219,21 @@ class Pipeline:
         valid = bool(found) and ((list_valid and not chosen) or sum(outcomes.values()) > 0)
         partial = bool(remaining or pages or next_page or pagination_unknown or errors)
         status = "partial" if valid and partial else "success" if valid else "error"
+        with self.db.session() as s:
+            campus_count = len(
+                list(
+                    s.scalars(
+                        select(Opportunity).where(
+                            Opportunity.source_id == source.id,
+                            Opportunity.recruitment_type == "campus",
+                            Opportunity.review_status.in_(["auto", "manual", "pending"]),
+                            Opportunity.merged_into_id.is_(None),
+                        )
+                    )
+                )
+            )
+        if valid and not partial and not campus_count:
+            status = "no_recruitment"
         result = dict(
             source_id=source.id,
             status=status,
@@ -257,7 +248,13 @@ class Pipeline:
             state.status = status
             state.last_count = len(found)
             state.last_error = "；".join(errors[:4])
-            state.cursor = {"backlog": remaining, "next_page": pages[0] if pages else next_page}
+            state.cursor = {
+                "backlog": remaining,
+                "next_page": pages[0] if pages else next_page,
+                "metadata": {
+                    u: self.fetcher.api_metadata[u] for u, _ in remaining if u in self.fetcher.api_metadata
+                },
+            }
             if valid:
                 state.last_success = stamp()
                 state.failures = 0
@@ -278,8 +275,8 @@ class Pipeline:
             versions = list(
                 s.scalars(
                     select(Document)
-                    .where(Document.parse_state == "pending_model", Document.parser_version == PARSER_VERSION)
-                    .order_by(Document.fetched_at)
+                    .where(Document.parse_state == "pending_model")
+                    .order_by(func.coalesce(Document.parse_attempt_at, Document.fetched_at))
                     .limit(limit)
                 )
             )
@@ -308,7 +305,7 @@ class Pipeline:
         midnight = local_now().replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC).isoformat()
         query = "国企 央企 校园招聘 报名截止 延期"
         with self.db.session() as s:
-            s.execute(__import__("sqlalchemy").text("BEGIN IMMEDIATE"))
+            s.execute(text("BEGIN IMMEDIATE"))
             used = len(list(s.scalars(select(DiscoveryCall).where(DiscoveryCall.created_at >= midnight))))
             if used >= self.cfg.tavily_daily_limit:
                 return {"status": "limited", "reason": "当日搜索免费配额已用完"}

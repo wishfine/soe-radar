@@ -78,6 +78,8 @@ class Opportunity(Base):
     last_checked: Mapped[str] = mapped_column(String, default=stamp)
     updated_at: Mapped[str] = mapped_column(String, default=stamp)
     sequence: Mapped[int] = mapped_column(Integer, default=0)
+    needs_review: Mapped[bool] = mapped_column(Boolean, default=False)
+    merged_into_id: Mapped[str | None] = mapped_column(ForeignKey("opportunities.id"))
     __table_args__ = (UniqueConstraint("batch_id", "scope"),)
 
 
@@ -95,6 +97,7 @@ class Document(Base):
     snapshot_path: Mapped[str] = mapped_column(String, default="")
     extraction: Mapped[dict | None] = mapped_column(JSON)
     parser_version: Mapped[str] = mapped_column(String, default="")
+    parse_attempt_at: Mapped[str | None] = mapped_column(String)
     opportunity_id: Mapped[str | None] = mapped_column(ForeignKey("opportunities.id"))
     parse_state: Mapped[str] = mapped_column(String, default="pending")
     __table_args__ = (UniqueConstraint("url", "digest"),)
@@ -143,6 +146,16 @@ class PersonalState(Base):
     saved: Mapped[bool] = mapped_column(Boolean, default=False)
     applied: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str] = mapped_column(Text, default="")
+
+
+class ReviewRecord(Base):
+    __tablename__ = "reviews"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
+    opportunity_id: Mapped[str] = mapped_column(ForeignKey("opportunities.id"), index=True)
+    document_id: Mapped[str | None] = mapped_column(ForeignKey("documents.id"))
+    decision: Mapped[str] = mapped_column(String)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[str] = mapped_column(String, default=stamp)
 
 
 class SourceState(Base):

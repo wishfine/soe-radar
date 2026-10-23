@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class DeadlineKind(StrEnum):
@@ -43,7 +44,7 @@ class ExtractionResult(BaseModel):
         "campus", "social", "internal", "intern", "postdoc", "notice", "other", "unknown"
     ] = "unknown"
     cohorts: list[int] = Field(default_factory=list)
-    season: str = ""
+    season: Literal["秋招", "春招", ""] = ""
     batch: str = "正式批"
     positions: list[Position] = Field(default_factory=list)
     locations: list[str] = Field(default_factory=list)
@@ -59,6 +60,22 @@ class ExtractionResult(BaseModel):
     urgency_note: str = ""
     review_reasons: list[str] = Field(default_factory=list)
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_campaign(cls, value):
+        if isinstance(value, dict):
+            value = dict(value)
+            value["season"] = {"秋季": "秋招", "春季": "春招", "秋季招聘": "秋招", "春季招聘": "春招"}.get(
+                value.get("season"), value.get("season", "")
+            )
+            claim = value.get("deadline")
+            if isinstance(claim, dict) and re.fullmatch(
+                r"(?:20\d{2}[届年]?)?(?:春季|秋季|春招|秋招)?(?:校园招聘|校招|本次招聘|全部岗位|本次校招)",
+                claim.get("scope", ""),
+            ):
+                value["deadline"] = {**claim, "scope": "本批次"}
+        return value
+
 
 class DocumentInput(BaseModel):
     url: str
@@ -68,6 +85,7 @@ class DocumentInput(BaseModel):
     source_id: str = "manual"
     employer_hint: str = ""
     attachments: list[dict] = Field(default_factory=list)
+    structured: dict = Field(default_factory=dict)
 
 
 class StatePatch(BaseModel):
@@ -77,6 +95,14 @@ class StatePatch(BaseModel):
     notes: str | None = Field(default=None, max_length=10000)
 
 
+class ManualEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    attachment_url: str
+    location: str = Field(min_length=2, max_length=500)
+    quote: str = Field(min_length=2, max_length=10000)
+    scope: str = "本批次"
+
+
 class ReviewInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     decision: str = Field(pattern="^(approve|reject)$")
@@ -84,6 +110,14 @@ class ReviewInput(BaseModel):
     official_url: str | None = None
     employer_proof_url: str | None = None
     target_opportunity_id: str | None = None
+    snapshot_id: str | None = None
+    use_snapshot: bool = False
+    published_at: date | None = None
+    publication_evidence: str = Field(default="", max_length=2000)
+    evidence: list[ManualEvidence] = Field(default_factory=list, max_length=20)
+    resolution_note: str = Field(default="", max_length=5000)
+    parent_employer_id: str | None = None
+    relationship_proof_url: str | None = None
 
 
 class SyncInput(BaseModel):
@@ -109,7 +143,10 @@ class SourceSpec(BaseModel):
     api_url_template: str = ""
     api_next_param: str = ""
     api_required_fields: dict[str, str] = Field(default_factory=dict)
+    api_method: Literal["GET", "POST"] = "GET"
+    api_body: dict = Field(default_factory=dict)
     fallback_urls: list[str] = Field(default_factory=list)
+    entry_is_document: bool = False
 
 
 def local_now() -> datetime:

@@ -100,3 +100,72 @@ def test_trs_pagination_is_parsed_without_executing_javascript():
         '<script>createPageHTML(18,4,"index","html");</script><p>共18页</p>',
     )
     assert ("https://www.boc.cn/aboutboc/bi4/index_5.html", "下一页") in page.links
+
+
+def test_json_jobs_do_not_require_recruitment_word_in_job_name():
+    from soe_radar.fetching import Page
+
+    source = SourceSpec(
+        id="api", name="岗位", url="https://example.org/list", domains=["example.org"], adapter="json"
+    )
+    page = Page(
+        url=source.url,
+        title="岗位",
+        text="",
+        via="api",
+        links=[
+            ("https://example.org/job/1", "示例公司 · 软件工程师"),
+            ("https://example.org/list?page=2", "下一页"),
+        ],
+    )
+    assert Fetcher.candidates(page, source) == [("https://example.org/job/1", "示例公司 · 软件工程师")]
+
+
+def test_nuxt_article_reads_literals_without_executing_script():
+    import json
+
+    from soe_radar.fetching import embedded_article
+
+    html = (
+        'window.__NUXT__=(function(){throw Error("do not execute")})('
+        + json.dumps("2027届校园招聘")
+        + ","
+        + json.dumps('<p><img src="https://example.org/poster.png"></p>')
+        + ");"
+    )
+    page = embedded_article("https://example.org/notice", html)
+    assert page.title == "2027届校园招聘"
+    assert page.attachments[0]["url"] == "https://example.org/poster.png"
+
+
+async def test_json_read_only_post_adapter_uses_configured_body(cfg):
+    source = SourceSpec(
+        id="api",
+        name="岗位",
+        url="https://example.org/list",
+        domains=["example.org"],
+        adapter="json",
+        api_method="POST",
+        api_body={"size": 10},
+        api_items_path="items",
+        api_fields={"title": "name", "url": "url"},
+    )
+
+    def response(request):
+        import json
+
+        assert request.method == "POST"
+        assert json.loads(request.content) == {"size": 10}
+        return httpx.Response(200, json={"items": [{"name": "软件工程师", "url": "/job/1"}]})
+
+    fetcher = Fetcher(cfg, transport=httpx.MockTransport(response))
+    page = await fetcher.page(source.url, source)
+    assert Fetcher.candidates(page, source)
+    await fetcher.close()
+
+
+def test_lazy_poster_uses_real_image_url_instead_of_empty_src():
+    page = extract_page(
+        "https://example.org/notice", '<article><img src="" data-original="/recruitment.png"></article>'
+    )
+    assert page.attachments[0]["url"] == "https://example.org/recruitment.png"

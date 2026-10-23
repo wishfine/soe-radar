@@ -6,8 +6,10 @@ from zoneinfo import ZoneInfo
 
 from .schemas import Claim, DeadlineKind, DocumentInput, ExtractionResult, Position
 
-PARSER_VERSION = "2026-10-v5"
-DATE_RE = re.compile(r"(?<!\d)(?:(20\d{2})\s*[年./\-]\s*)?(\d{1,2})\s*[月./\-]\s*(\d{1,2})\s*日?")
+PARSER_VERSION = "2026-10-v9"
+DATE_RE = re.compile(
+    r"(?<!\d)(?<!\d:)(?<!\d：)(?:(20\d{2})\s*[年./\-]\s*)?(\d{1,2})\s*[月./\-]\s*(\d{1,2})(?![\d:：])\s*日?"
+)
 APPLY = re.compile(r"报名|网申|投递|简历.{0,5}(?:接收|接收)|申请(?:截止|时间|期限)|截止(?:日期|时间)")
 NEGATIVE = re.compile(r"年龄|毕业时间|毕业证|学位证|取得学历|资格计算|笔试|面试|宣讲|公示|录用通知")
 POSITIVE = re.compile(r"(?:报名|网申|投递|申请).{0,8}(?:截止|截至|时间|期限)|截止.{0,12}(?:报名|投递|网申)")
@@ -77,7 +79,10 @@ def _dated(clause: str, published: date | None) -> tuple[list[tuple[date, re.Mat
             basis = f"公告发布日期 {published.isoformat()}"
         else:
             raise ValueError("日期缺少年份且无公告发布上下文")
-        value = date(year, month, day)
+        try:
+            value = date(year, month, day)
+        except ValueError:
+            raise ValueError(f"无效日期：{month}月{day}日") from None
         if not y and published and abs((value - published).days) > 200:
             raise ValueError("无年份日期与公告发布日相距过远")
         found.append((value, m))
@@ -102,7 +107,10 @@ def parse_claim(clause: str, published: date | None, offset: int = 0) -> Claim:
         if hour == 24 and minute == 0:
             dt = datetime.combine(day + timedelta(days=1), datetime.min.time())
         else:
-            dt = datetime(day.year, day.month, day.day, hour, minute)
+            try:
+                dt = datetime(day.year, day.month, day.day, hour, minute)
+            except ValueError:
+                raise ValueError(f"无效截止时刻：{hour}时{minute}分") from None
         kind, value = DeadlineKind.DATETIME, dt.replace(tzinfo=ZoneInfo("Asia/Shanghai")).isoformat()
     return Claim(
         kind=kind, value=value, quote=clause, start=offset, end=offset + len(clause), year_basis=basis
@@ -130,8 +138,24 @@ def extract_rules(document: DocumentInput) -> ExtractionResult:
         re.split(r"20\d{2}|校园招聘|高校毕业生|招聘公告", title)[0].strip(" -—｜：").removeprefix("关于")
     )
     if 2 < len(subject) < 70 and re.search(r"公司|集团|银行|研究院|中心|科技", subject):
+        entity = re.match(r"(.+?(?:股份有限公司|有限责任公司|有限公司))", subject)
+        subject = entity.group(1) if entity else re.split(r"公开招聘|招聘|解决方案部|总经理岗位", subject)[0]
+        hint = document.employer_hint
+        result.employer = (
+            hint
+            if hint and (subject == hint or subject.replace("省", "") == hint.replace("省", ""))
+            else subject
+        )
+    elif (
+        2 < len(subject) < 70
+        and re.search(r"校园|校招|应届|毕业生", title)
+        and subject not in document.employer_hint
+    ):
         result.employer = subject
-    if re.search(r"拟录用|拟接收|情况公示|笔试通知|面试通知", title):
+    if re.search(
+        r"拟录用|拟接收|情况公示|笔试通知|面试通知|系统.{0,5}(?:升级|维护)|网站.{0,5}(?:升级|维护)|停机|暂停服务",
+        title,
+    ):
         result.recruitment_type = "notice"
     elif re.search(r"内部招聘|系统内招聘|竞争上岗", title):
         result.recruitment_type = "internal"
@@ -141,9 +165,15 @@ def extract_rules(document: DocumentInput) -> ExtractionResult:
         result.recruitment_type = "postdoc"
     elif re.search(r"实习", title):
         result.recruitment_type = "intern"
+    elif re.search(r"(?:本次|本公告|招聘类型)[^。\n]{0,12}社会招聘|面向社会.{0,8}招聘", text[:2000]) or (
+        not re.search(r"校园|毕业生|应届", title) and re.search(r"社会招聘(?:网站|岗位|渠道)", text)
+    ):
+        result.recruitment_type = "social"
     elif re.search(r"校园|校招|毕业生|应届|20\d{2}届", title):
         result.recruitment_type = "campus"
     elif re.search(r"应届毕业生|校园招聘|高校毕业生", text[:1600]):
+        result.recruitment_type = "campus"
+    elif document.structured.get("recruitment_type") == "campus":
         result.recruitment_type = "campus"
     for series in re.findall(r"20\d{2}(?:\s*[、,，/和及至\-]\s*20\d{2})*\s*届", combined):
         years = [int(x) for x in re.findall(r"20\d{2}", series)]
@@ -153,7 +183,11 @@ def extract_rules(document: DocumentInput) -> ExtractionResult:
         result.cohorts.extend(years)
     if not result.cohorts:
         result.cohorts = [
-            int(x) for x in re.findall(r"(20\d{2})年(?:度)?(?:全球)?(?:校园招聘|高校毕业生)", title)
+            int(x)
+            for x in re.findall(
+                r"(20\d{2})(?:年(?:度)?)?(?:全球)?(?:应届)?(?:校园招聘|高校毕业生|大学毕业生|秋季校园招聘|春季校园招聘)",
+                combined,
+            )
         ]
     result.cohorts = sorted(set(result.cohorts))
     for word in ["提前批", "补录", "补招", "第一批", "第二批", "第三批"]:
@@ -161,18 +195,24 @@ def extract_rules(document: DocumentInput) -> ExtractionResult:
             result.batch = word
             break
     result.season = "春招" if "春" in title else "秋招" if "秋" in title else ""
-    result.locations = [city for city in CITIES if city in text]
-    for raw_location in re.findall(r"(?:工作地点|工作城市|招聘地点)[：:\s]*([^\n。；]{2,100})", text):
+    for raw_location in re.findall(r"(?:工作地点|工作城市|招聘地点)[为是：:\s]*([^\n。；]{2,100})", text):
         for value in re.split(r"[、,，;/|]", raw_location):
             value = value.strip()
+            value = re.sub(r"^(?:均在|位于|为|是)", "", value)
             if (
                 value
-                and len(value) < 25
-                and not re.search(r"详见|不限|岗位|条件", value)
+                and len(value) <= 12
+                and not re.search(r"详见|不限|岗位|条件|户口|户籍|生源|招聘|择优|解决", value)
                 and value not in result.locations
             ):
                 result.locations.append(value)
     result.education = [x for x in ["专科", "本科", "硕士", "博士"] if x in text]
+    if document.structured.get("location"):
+        result.locations = [
+            x.strip() for x in re.split(r"[、,，;/|]", document.structured["location"]) if x.strip()
+        ]
+    if document.structured.get("education"):
+        result.education = [document.structured["education"]]
     result.majors = [
         x
         for x in [
@@ -221,9 +261,19 @@ def extract_rules(document: DocumentInput) -> ExtractionResult:
         if re.search(r"部分岗位|部分单位|部分职位", combined[:600]):
             result.review_reasons.append("变更仅适用于部分对象，需确认岗位范围")
     claims = []
-    clauses = list(re.finditer(r"[^。；;！？]+", text))
+    clauses = list(re.finditer(r"[^。；;！？\n]+", text))
     for segment in clauses:
         raw = segment.group()
+        # Keep only date continuations after a deadline heading, not signatures or footers.
+        if APPLY.search(raw):
+            tail = text[segment.end() :]
+            for line in tail.splitlines()[1:]:
+                if len(raw) > 250 or not re.fullmatch(
+                    r"\s*(?:(?:自|至|截至|即日起)[：:]?)?[\d\s年月日时点分北京时间至到—～~:：./()（）\-]+\s*",
+                    line,
+                ):
+                    break
+                raw += "\n" + line
         # A deadline heading may be on the preceding line; retain a short bounded window only.
         for marker in APPLY.finditer(raw):
             begin = max(0, marker.start() - 15)
@@ -287,9 +337,24 @@ def extract_rules(document: DocumentInput) -> ExtractionResult:
     return result
 
 
-def validate_extraction(result: ExtractionResult, document: DocumentInput) -> list[str]:
+def validate_extraction(
+    result: ExtractionResult, document: DocumentInput, *, manual=False, evidence=(), resolution_note=""
+) -> list[str]:
     """Evidence, not model confidence, decides whether a claim can be published."""
     reasons = list(result.review_reasons)
+    raw_text = document.text
+    if manual:
+        from .urls import canonical
+
+        attachments = {canonical(a["url"]) for a in document.attachments if a.get("url")}
+        transcribed = []
+        for entry in evidence:
+            if canonical(entry.attachment_url) not in attachments:
+                reasons.append("人工转录未绑定这份文档的附件")
+            else:
+                transcribed.append(entry.quote)
+        if transcribed:
+            document = document.model_copy(update={"text": document.text + "\n" + "\n".join(transcribed)})
     if result.recruitment_type != "campus":
         reasons.append("未确认为校园招聘")
     original = extract_rules(document)
@@ -300,12 +365,17 @@ def validate_extraction(result: ExtractionResult, document: DocumentInput) -> li
         reasons.append("招聘主体不明确")
     if not result.cohorts:
         reasons.append("毕业届别不明确")
-    elif original.cohorts and set(result.cohorts) != set(original.cohorts):
+    elif (
+        original.cohorts and set(result.cohorts) != set(original.cohorts) and not (manual and resolution_note)
+    ):
         reasons.append("毕业届别与原文明确表述不一致")
-    elif any(str(year) not in document.title + document.text for year in result.cohorts):
+    elif any(str(year) not in document.title + document.text for year in result.cohorts) and not (
+        manual and resolution_note
+    ):
         reasons.append("毕业届别无法在原文中定位")
     if (
         original.deadline.kind == DeadlineKind.CONFLICT
+        and not (manual and resolution_note)
         and not result.scoped_deadlines
         and not (
             result.action == "extend" and re.search(r"延长.{0,10}至|延期至|调整为", result.deadline.quote)
@@ -319,6 +389,7 @@ def validate_extraction(result: ExtractionResult, document: DocumentInput) -> li
         reasons.append("部分岗位的变更不能套用整批招聘")
     if (
         result.deadline.kind == DeadlineKind.UNANNOUNCED
+        and not manual
         and not result.scoped_deadlines
         and result.action != "close"
     ):
@@ -336,6 +407,10 @@ def validate_extraction(result: ExtractionResult, document: DocumentInput) -> li
                 reasons.append("日期证据无法在原文中定位")
                 continue
             claim.start, claim.end = start, start + len(claim.quote)
+            if claim.quote not in raw_text:
+                if not any(e.quote == claim.quote and e.scope == claim.scope for e in evidence):
+                    reasons.append("人工转录的适用范围与截止声明不一致")
+                claim.start = claim.end = -1
             context = re.split(r"[。；;\n]", document.text[max(0, start - 40) : start])[-1] + claim.quote
             if (
                 not re.search(r"报名|网申|投递|申请|简历.{0,5}接收", context)
