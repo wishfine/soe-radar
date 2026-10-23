@@ -43,7 +43,7 @@ LEVELS = {
 def _csv(path: Path, fields: list[str], rows: list[dict]):
     path.parent.mkdir(parents=True, exist_ok=True)
     stream = io.StringIO(newline="")
-    writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore")
+    writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
     writer.writeheader()
     for row in rows:
         writer.writerow({key: _safe(row.get(key, "")) for key in fields})
