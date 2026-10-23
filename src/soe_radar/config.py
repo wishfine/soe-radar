@@ -57,9 +57,10 @@ class RegistryConfig(BaseModel):
     region: str = "全国"
     url: str = ""
     domains: list[str] = Field(default_factory=list)
+    page_urls: list[str] = Field(default_factory=list)
     name_columns: list[int] = Field(default_factory=lambda: [1])
     min_entries: int = Field(default=1, ge=1)
-    adapter: Literal["table", "links", "numbered"] = "table"
+    adapter: Literal["table", "links", "numbered", "text"] = "table"
     entry_selector: str = ""
     scope: str = "未确认名单范围"
     authority_url: str = ""
@@ -75,6 +76,10 @@ class RegistryConfig(BaseModel):
             public_url(self.url)
             if not self.domains or not on_domains(self.url, self.domains):
                 raise ValueError("名录入口必须位于明确配置的官方域名")
+            for page_url in self.page_urls:
+                public_url(page_url)
+                if not on_domains(page_url, self.domains):
+                    raise ValueError("名录分页必须位于同一官方域名")
         return self
 
 

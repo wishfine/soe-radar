@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from datetime import UTC, datetime, timedelta
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 from bs4 import BeautifulSoup
 from sqlalchemy import select
@@ -14,14 +14,99 @@ from .models import Employer, Opportunity, RegistrySnapshot, RegistryState, Sour
 from .schemas import local_now
 from .urls import on_domains, public_url
 
+COMPANY_RE = re.compile(
+    r"[\u4e00-\u9fffA-Za-z0-9（）()·\[\]【】—－\-]{4,120}"
+    r"(?:公司|集团|银行|出版社|报刊社|总局)"
+    r"(?:[（(\[][^（）()\[\]]{2,80}[）)\]])?"
+)
+
+
+def _entry(name, *, official_url="", profile_url="", rank=None, quote=""):
+    return {
+        "name": name,
+        "official_url": official_url,
+        "profile_url": profile_url,
+        "rank": rank,
+        "quote": quote or name,
+    }
+
+
+def _classify_target(target, base_url):
+    """Separate an enterprise's own site from a government profile page."""
+    if not target:
+        return "", ""
+    try:
+        target = public_url(target)
+    except ValueError:
+        return "", ""
+    if urlsplit(target).netloc == urlsplit(base_url).netloc:
+        return "", target
+    return target, ""
+
+
+def _link_target(node, base_url, name=""):
+    anchors = node.select("a[href]") if node.name != "a" else [node]
+    for link in anchors:
+        href = (link.get("href") or "").strip()
+        if not href or href.startswith(("#", "javascript:", "mailto:")):
+            continue
+        if name and name not in link.get_text(" ", strip=True):
+            continue
+        try:
+            target = public_url(urljoin(base_url, href))
+        except ValueError:
+            continue
+        return _classify_target(target, base_url)
+    return "", ""
+
+
+def _is_company(name, *, strict=True):
+    if not name or "集体" in name:
+        return False
+    if COMPANY_RE.fullmatch(name):
+        return True
+    # A few official names append a bracketed alias, e.g. 中国旅游集团...[香港中旅...].
+    if not strict and re.search(r"公司|集团|银行|出版社|报刊社|总局", name):
+        return True
+    return False
+
 
 def parse_registry(html, spec):
     soup = BeautifulSoup(html, "html.parser")
     entries = {}
-    if spec.adapter in ("links", "numbered"):
+    if spec.adapter in ("links", "numbered", "text"):
         if not spec.entry_selector:
             raise ValueError("非表格名录必须配置正文选择器，不能从全站猜测企业名单")
         for node in soup.select(spec.entry_selector):
+            if spec.adapter == "text":
+                # Prefer one anchor per enterprise; fall back to whitespace-separated plain text.
+                anchors = [
+                    anchor
+                    for anchor in node.select("a[href]")
+                    if _is_company(anchor.get_text(" ", strip=True).strip())
+                ]
+                if anchors:
+                    for anchor in anchors:
+                        name = anchor.get_text(" ", strip=True).strip()
+                        name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", name).lstrip("（(【[")
+                        if not _is_company(name):
+                            continue
+                        official_url, profile_url = _link_target(anchor, spec.url, name)
+                        entries[name] = _entry(
+                            name,
+                            official_url=official_url,
+                            profile_url=profile_url,
+                            quote=name,
+                        )
+                    continue
+                for token in node.get_text(" ", strip=True).split():
+                    name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", token)
+                    if name.startswith(("（", "(", "【", "[")):
+                        name = name.lstrip("（(【[").rstrip("）)】]")
+                    if not _is_company(name):
+                        continue
+                    entries[name] = _entry(name, quote=token)
+                continue
             values = (
                 [node.get_text(" ", strip=True)]
                 if spec.adapter == "links"
@@ -29,52 +114,116 @@ def parse_registry(html, spec):
             )
             for value in values:
                 name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", value).strip()
-                if not re.fullmatch(
-                    r"[\u4e00-\u9fffA-Za-z0-9（）()·\[\]【】—－\-]{4,100}(?:公司|银行|总局)", name
-                ):
+                name = name.lstrip("（(【[")
+                if not _is_company(name):
                     continue
-                if "集体" in name:
+                official_url, profile_url = _link_target(node, spec.url, name)
+                entries[name] = _entry(
+                    name,
+                    official_url=official_url,
+                    profile_url=profile_url,
+                    quote=value.strip(),
+                )
+    if spec.adapter == "table":
+        for row in soup.select("table tr"):
+            cells = row.find_all(["td", "th"], recursive=False)
+            if not cells:
+                continue
+            texts = [re.sub(r"\s+", "", cell.get_text(" ", strip=True)) for cell in cells]
+            # Two-column layouts (e.g. SASAC, Hunan) put rank/name pairs side by side.
+            # Scan adjacent pairs so blank spacer cells and multi-pair rows are both handled.
+            for index in range(len(cells) - 1):
+                rank, name = texts[index], texts[index + 1]
+                if not re.fullmatch(r"\d{1,5}", rank) or not _is_company(name, strict=False):
                     continue
-                link = node if node.name == "a" else node.select_one("a[href]")
-                target = ""
-                if link:
-                    try:
-                        target = public_url(urljoin(spec.url, link.get("href", "")))
-                    except ValueError:
-                        pass
-                entries[name] = {"name": name, "official_url": target}
-    for row in soup.select("table tr") if spec.adapter == "table" else []:
-        cells = row.find_all(["td", "th"], recursive=False)
-        for col in spec.name_columns:
-            if col < 1 or len(cells) <= col:
-                continue
-            rank = re.sub(r"\s+", "", cells[col - 1].get_text(strip=True))
-            name = re.sub(r"\s+", "", cells[col].get_text())
-            if not re.fullmatch(r"\d{1,5}", rank) or not re.fullmatch(
-                r"[\u4e00-\u9fffA-Za-z0-9（）()·\[\]【】—－\-]{4,120}", name
-            ):
-                continue
-            if not re.search(r"公司|集团|银行|出版社|报刊社", name):
-                continue
-            link = cells[col].select_one("a[href]")
-            official_url = ""
-            if link:
-                try:
-                    official_url = public_url(urljoin(spec.url, link.get("href", "")))
-                except ValueError:
-                    pass
-            entries[name] = {"name": name, "official_url": official_url}
+                link = cells[index + 1].select_one("a[href]")
+                official_url, profile_url = _link_target(link, spec.url) if link else ("", "")
+                entries[name] = _entry(
+                    name,
+                    official_url=official_url,
+                    profile_url=profile_url,
+                    rank=int(rank),
+                    quote=row.get_text(" ", strip=True),
+                )
+            # Explicit columns remain supported for non-adjacent or unusual layouts.
+            for col in spec.name_columns:
+                if col < 1 or len(cells) <= col:
+                    continue
+                rank, name = texts[col - 1], texts[col]
+                if not re.fullmatch(r"\d{1,5}", rank) or not _is_company(name, strict=False):
+                    continue
+                link = cells[col].select_one("a[href]")
+                official_url, profile_url = _link_target(link, spec.url) if link else ("", "")
+                entries.setdefault(
+                    name,
+                    _entry(
+                        name,
+                        official_url=official_url,
+                        profile_url=profile_url,
+                        rank=int(rank),
+                        quote=row.get_text(" ", strip=True),
+                    ),
+                )
     entries = {name: entry for name, entry in entries.items() if name not in spec.exclude_names}
     if len(entries) < spec.min_entries:
         raise ValueError(f"名录未取得足够的编号企业行（{len(entries)}/{spec.min_entries}）；保留已有版本")
     return sorted(entries.values(), key=lambda x: x["name"])
 
 
-def save_registry(db, cfg, spec, html):
+def publication_date(html):
+    """Read an explicit page publication date; never infer it from fetch time or news lists."""
+    soup = BeautifulSoup(html, "html.parser")
+    text = soup.get_text(" ", strip=True)
+    explicit = re.search(
+        r"(?:发布时间|发布日期|时间|日期)\s*[：:]\s*(20\d{2})[年./-](\d{1,2})[月./-](\d{1,2})",
+        text[:20000],
+    )
+    if explicit:
+        return f"{int(explicit.group(1)):04d}-{int(explicit.group(2)):02d}-{int(explicit.group(3)):02d}"
+    for node in soup.select("time[datetime],.publish-time,.publish_time,.con_time,.article-time"):
+        candidate = node.get("datetime") or node.get_text(" ", strip=True)
+        match = re.search(r"(20\d{2})[年./-](\d{1,2})[月./-](\d{1,2})", candidate)
+        if match:
+            return f"{int(match.group(1)):04d}-{int(match.group(2)):02d}-{int(match.group(3)):02d}"
+    meta = soup.select_one(
+        'meta[name="PubDate"],meta[name="publishdate"],meta[property="article:published_time"]'
+    )
+    if meta:
+        match = re.search(r"(20\d{2})[年./-](\d{1,2})[月./-](\d{1,2})", meta.get("content", ""))
+        if match:
+            return f"{int(match.group(1)):04d}-{int(match.group(2)):02d}-{int(match.group(3)):02d}"
+    return ""
+
+
+def save_registry(
+    db,
+    cfg,
+    spec,
+    html,
+    *,
+    pages=None,
+    status="success",
+    publication=None,
+    error="",
+    provenance=None,
+):
     if not spec.url or not on_domains(spec.url, spec.domains):
         raise ValueError("名录缺少已确认的官方入口")
     entries = parse_registry(html, spec)
-    return _save_entries(db, cfg, spec, entries, html.encode(), spec.url, "html", "success")
+    return _save_entries(
+        db,
+        cfg,
+        spec,
+        entries,
+        html.encode(),
+        spec.url,
+        "html",
+        status,
+        pages=pages,
+        publication=publication or publication_date(html),
+        error=error,
+        provenance=provenance,
+    )
 
 
 def import_registry_csv(db, cfg, spec, content, proof_url, *, confirmed=False):
@@ -131,13 +280,72 @@ def import_registry_csv(db, cfg, spec, content, proof_url, *, confirmed=False):
     )
 
 
-def _save_entries(db, cfg, spec, entries, raw, source_url, extension, status, *, provenance=None):
-    digest = hashlib.sha256(source_url.encode() + b"\0" + raw).hexdigest()
+def _save_entries(
+    db,
+    cfg,
+    spec,
+    entries,
+    raw,
+    source_url,
+    extension,
+    status,
+    *,
+    provenance=None,
+    pages=None,
+    publication=None,
+    error="",
+):
     folder = cfg.data_dir / "registries"
     folder.mkdir(parents=True, exist_ok=True)
-    path = folder / (digest + "." + extension)
-    if not path.exists():
-        path.write_bytes(raw)
+    page_records = []
+    if pages:
+        digest_input = b""
+        for page in pages:
+            page_raw = page["raw"]
+            page_digest = hashlib.sha256(page_raw).hexdigest()
+            page_path = folder / (page_digest + "." + extension)
+            if not page_path.exists():
+                page_path.write_bytes(page_raw)
+            page_records.append(
+                {
+                    "url": page["url"],
+                    "sha256": page_digest,
+                    "path": str(page_path.relative_to(cfg.data_dir)),
+                    "fetched_at": stamp(),
+                }
+            )
+            digest_input += page["url"].encode() + b"\0" + page_raw + b"\0"
+        digest = hashlib.sha256(digest_input).hexdigest()
+    else:
+        digest = hashlib.sha256(source_url.encode() + b"\0" + raw).hexdigest()
+        path = folder / (digest + "." + extension)
+        if not path.exists():
+            path.write_bytes(raw)
+        page_records = [
+            {
+                "url": source_url,
+                "sha256": digest,
+                "path": str(path.relative_to(cfg.data_dir)),
+                "fetched_at": stamp(),
+            }
+        ]
+    raw_path = page_records[0]["path"]
+    details = dict(
+        provenance
+        or {
+            "acquisition": "direct" if status == "success" else "manual_csv",
+            "scope": spec.scope,
+            "complete": False,
+        }
+    )
+    details.setdefault("scope", spec.scope)
+    details.setdefault("complete", False)
+    details["pages"] = page_records
+    details["pagination_complete"] = len(page_records) > 1 and not error
+    if publication:
+        details["published_at"] = publication
+    if error:
+        details["fetch_error"] = error[:300]
     with db.session() as s:
         snapshot = s.scalar(
             select(RegistrySnapshot).where(
@@ -150,16 +358,14 @@ def _save_entries(db, cfg, spec, entries, raw, source_url, extension, status, *,
                 digest=digest,
                 source_url=source_url,
                 entries=entries,
-                raw_path=str(path.relative_to(cfg.data_dir)),
-                provenance=provenance
-                or {
-                    "acquisition": "direct" if status == "success" else "manual_csv",
-                    "scope": spec.scope,
-                    "complete": False,
-                },
+                raw_path=raw_path,
+                provenance=details,
             )
             s.add(snapshot)
             s.flush()
+        else:
+            # Same content can gain better provenance without creating a duplicate version.
+            snapshot.provenance = details
         state = s.get(RegistryState, spec.id)
         if not state:
             state = RegistryState(id=spec.id)
@@ -174,8 +380,14 @@ def _save_entries(db, cfg, spec, entries, raw, source_url, extension, status, *,
         state.active_snapshot_id = snapshot.id
         state.status = status
         state.last_success = state.last_attempt = stamp()
-        state.last_error = ""
-        return {"id": snapshot.id, "registry_id": spec.id, "count": len(entries), "digest": digest}
+        state.last_error = error[:300]
+        return {
+            "id": snapshot.id,
+            "registry_id": spec.id,
+            "count": len(entries),
+            "digest": digest,
+            "pages": len(page_records),
+        }
 
 
 def registry_failure(db, registry_id, reason):
@@ -206,18 +418,43 @@ async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
                 results.append({"registry_id": spec.id, "status": "missing_entry"})
                 continue
             db.acquire("registry", owner, seconds=600)
-            try:
-                response = await fetcher.get(
-                    spec.url, spec.domains, network_mode=spec.network_mode, source_id="registry:" + spec.id
-                )
-                results.append({"status": "success", **save_registry(db, cfg, spec, response.text)})
-            except Exception as exc:
-                # Only local, controlled failure messages are safe to retain.
-                from .fetching import FetchFailure
+            pages, errors = [], []
+            urls = [spec.url, *spec.page_urls]
+            for page_url in urls:
+                try:
+                    response = await fetcher.get(
+                        page_url,
+                        spec.domains,
+                        network_mode=spec.network_mode,
+                        source_id="registry:" + spec.id,
+                    )
+                    pages.append({"url": str(response.url), "raw": response.content})
+                except Exception as exc:
+                    from .fetching import FetchFailure
 
-                reason = str(exc) if isinstance(exc, (ValueError, FetchFailure)) else type(exc).__name__
-                registry_failure(db, spec.id, reason)
-                results.append({"registry_id": spec.id, "status": "error", "error": reason})
+                    reason = str(exc) if isinstance(exc, (ValueError, FetchFailure)) else type(exc).__name__
+                    errors.append(f"{page_url}：{reason}")
+            if not pages:
+                registry_failure(db, spec.id, "；".join(errors) or "没有取得名录页面")
+                results.append({"registry_id": spec.id, "status": "error", "error": "；".join(errors)[:300]})
+                continue
+            combined = "\n".join(page["raw"].decode("utf-8", "replace") for page in pages)
+            status = "success" if not errors else "partial"
+            try:
+                saved = save_registry(
+                    db,
+                    cfg,
+                    spec,
+                    combined,
+                    pages=pages,
+                    status=status,
+                    publication=publication_date(pages[0]["raw"].decode("utf-8", "replace")),
+                    error="；".join(errors),
+                )
+                results.append({"status": status, "error": "；".join(errors)[:300], **saved})
+            except ValueError as exc:
+                registry_failure(db, spec.id, str(exc))
+                results.append({"registry_id": spec.id, "status": "error", "error": str(exc)})
         return {"registries": results, "network_attempts": fetcher.network_attempts[-100:]}
     finally:
         if own_fetcher:

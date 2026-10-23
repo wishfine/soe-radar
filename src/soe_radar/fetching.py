@@ -119,18 +119,54 @@ def extract_page(url: str, html: str) -> Page:
     text = body.get_text("\n", strip=True)
     text = re.sub(r"[ \t\xa0]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
-    attachments = [
-        {"url": target, "label": label}
-        for target, label in links
-        if re.search(r"\.(pdf|png|jpg|jpeg)(?:[?#]|$)", target, re.I)
-    ]
+
+    def chrome(target, label):
+        text = (target + " " + label).lower()
+        if re.search(
+            r"(?:logo|icon|qrcode|qr-code|二维码|分享|share|banner|spacer|pixel|button|nav-|/images/col-)",
+            text,
+        ):
+            return True
+        # Government CMS chrome often lives under /images/ with generic alt text.
+        return "/images/" in target.lower() and not re.search(
+            r"(?:招聘|岗位|公告|简章|海报|条件|职位|job|recruit|campus|poster)", text
+        )
+
+    ignored_chrome = 0
+    attachments = []
+    for target, label in links:
+        if not re.search(r"\.(pdf|png|jpg|jpeg)(?:[?#]|$)", target, re.I):
+            continue
+        if chrome(target, label):
+            ignored_chrome += 1
+            continue
+        attachments.append({"url": target, "label": label})
     for img in body.select("img[src],img[data-src],img[data-original]"):
         image_url = img.get("data-original") or img.get("data-src") or img.get("src", "")
         if not image_url.strip():
             continue
+        try:
+            width = int(re.sub(r"\D", "", img.get("width", "") or "0") or 0)
+            height = int(re.sub(r"\D", "", img.get("height", "") or "0") or 0)
+        except ValueError:
+            width = height = 0
+        if (width and width < 100) or (height and height < 100):
+            continue
         target = urljoin(url, image_url)
+        label = img.get("alt") or "正文图片（待人工读取）"
+        if chrome(target, label):
+            ignored_chrome += 1
+            continue
         if target.startswith(("http://", "https://")) and target not in {a["url"] for a in attachments}:
-            attachments.append({"url": target, "label": img.get("alt") or "正文图片（待人工读取）"})
+            attachments.append({"url": target, "label": label})
+    if ignored_chrome:
+        attachments.append(
+            {
+                "url": "",
+                "label": f"已忽略站点装饰图片 {ignored_chrome} 张（logo/图标/导航等，非招聘附件）",
+                "status": "ignored_chrome",
+            }
+        )
     return Page(
         url=url,
         title=title,
@@ -496,7 +532,16 @@ class Fetcher:
             raise FetchFailure("JSON 来源尚未配置 api_items_path 和 api_fields")
         rows = data
         for part in source.api_items_path.split("."):
-            rows = rows[int(part)] if isinstance(rows, list) else rows.get(part, [])
+            if rows is None:
+                raise FetchFailure("公开接口返回空数据或要求登录；未绕过登录限制")
+            if isinstance(rows, list):
+                rows = rows[int(part)]
+            elif isinstance(rows, dict):
+                rows = rows.get(part)
+            else:
+                raise FetchFailure("公开接口字段结构发生变化")
+        if rows is None:
+            raise FetchFailure("公开接口返回空数据或要求登录；未绕过登录限制")
         if not isinstance(rows, list):
             raise FetchFailure("公开接口字段结构发生变化")
         title_key, url_key = source.api_fields.get("title", "title"), source.api_fields.get("url", "url")
@@ -591,8 +636,9 @@ class Fetcher:
                     item["status"] = "failed"
                     item["error"] = type(exc).__name__
             else:
-                item["status"] = "needs_review"
-                if on_domains(attachment["url"], source.domains):
+                if item.get("status") != "ignored_chrome":
+                    item["status"] = "needs_review"
+                if item.get("status") != "ignored_chrome" and on_domains(attachment["url"], source.domains):
                     try:
                         response = await self.get(
                             attachment["url"],

@@ -85,6 +85,24 @@ def test_body_images_are_not_silently_treated_as_parsed():
     assert page.attachments == [{"url": "https://example.org/poster.jpg", "label": "招聘简章"}]
 
 
+def test_site_logos_and_icons_are_not_counted_as_recruitment_attachments():
+    page = extract_page(
+        "https://example.org/notice",
+        """<h1>示例集团2027届校园招聘</h1><article>
+        <img src="/images/logo.png" alt="网站标志">
+        <img src="/images/col-icon1.png" alt="栏目标志">
+        <img src="/recruitment-poster.jpg" alt="招聘海报">
+        <a href="/files/conditions.pdf">招聘条件.pdf</a>
+        </article>""",
+    )
+    assert [item["url"] for item in page.attachments[:2]] == [
+        "https://example.org/files/conditions.pdf",
+        "https://example.org/recruitment-poster.jpg",
+    ]
+    assert page.attachments[-1]["status"] == "ignored_chrome"
+    assert "2 张" in page.attachments[-1]["label"]
+
+
 def test_volatile_waf_parameters_do_not_create_different_announcements():
     from soe_radar.urls import canonical
 

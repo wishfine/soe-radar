@@ -146,3 +146,17 @@ def test_model_cannot_change_graduation_cohort():
     result = extract_rules(document)
     result.cohorts = [2028]
     assert validate_extraction(result, document)
+
+
+def test_result_publication_is_not_an_open_campus_recruitment():
+    from soe_radar.extraction import extract_rules
+    from soe_radar.schemas import DocumentInput
+
+    result = extract_rules(
+        DocumentInput(
+            url="https://example.gov.cn/notice",
+            title="山西建设投资集团有限公司2026年度高校毕业生招聘结果公示",
+            text="现将2026年度高校毕业生招聘结果公示如下。",
+        )
+    )
+    assert result.recruitment_type == "notice"

@@ -240,7 +240,7 @@ class Pipeline:
             discovered=len(found),
             processed=len(chosen),
             errors=errors[:12],
-            pagination_complete=not bool(pages or next_page or pagination_unknown),
+            pagination_complete=not bool(pages or next_page or pagination_unknown or errors),
             **outcomes,
         )
         with self.db.session() as s:

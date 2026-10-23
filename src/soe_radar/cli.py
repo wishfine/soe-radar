@@ -190,6 +190,51 @@ def doctor(
     db.engine.dispose()
 
 
+@app.command("relationship-add")
+def relationship_add(
+    parent: str = typer.Option(..., help="母公司全称，必须已建档"),
+    child: str = typer.Option(..., help="子公司全称，必须已建档"),
+    evidence_url: str = typer.Option(..., help="官方关系证据URL"),
+    quote: str = typer.Option(..., help="官方原文中说明隶属关系的片段"),
+    evidence_date: str = typer.Option(..., help="证据发布日期 YYYY-MM-DD"),
+    relation_type: str = typer.Option("subsidiary", help="关系类型"),
+):
+    """录入有原文证据的母子公司关系；缺证据时拒绝写入。"""
+    from .relationships import add_relationship
+
+    cfg = load_settings()
+    db = initialize(cfg)
+    try:
+        output(
+            add_relationship(
+                db,
+                parent,
+                child,
+                relation_type=relation_type,
+                evidence_url=evidence_url,
+                quote=quote,
+                evidence_date=evidence_date,
+            )
+        )
+    finally:
+        db.engine.dispose()
+
+
+@app.command("delivery-export")
+def delivery_export(
+    out: Path = typer.Option(Path("delivery"), help="交付目录"),
+):
+    """生成可复核的底册清单、企业、关系、来源、缺口和证据哈希。"""
+    from .delivery import export_delivery
+
+    cfg = load_settings()
+    db = initialize(cfg)
+    try:
+        output(export_delivery(db, cfg, out))
+    finally:
+        db.engine.dispose()
+
+
 @app.command("coverage")
 def coverage(cohort: int | None = None):
     """列出已知企业、未接入名录、网络受阻与当届活动覆盖。全国分母未知时不造覆盖率。"""
@@ -213,6 +258,53 @@ def registry_refresh(ids: str | None = typer.Option(None, help="逗号分隔名�
     db = initialize(cfg)
     output(asyncio.run(refresh_registries(db, cfg, selected)))
     db.engine.dispose()
+
+
+@app.command("registry-import-html")
+def registry_import_html(
+    registry: str = typer.Option(..., "--registry", help="名录 id"),
+    file: Path = typer.Option(..., "--file", help="已保存的官方页面 HTML"),
+    proof_url: str = typer.Option(..., "--proof-url", help="页面官方 URL"),
+    published_at: str = typer.Option("", help="页面可见发布日期 YYYY-MM-DD"),
+    note: str = typer.Option("", help="取得方式、TLS/验证码等限制说明"),
+    confirm_official: bool = typer.Option(False, "--confirm-official", help="确认页面来自官方域名"),
+):
+    """导入人工保存的官方 HTML；用于自动抓取被 TLS 链或超时阻断时留证。"""
+    from .coverage import save_registry
+    from .urls import on_domains, public_url
+
+    if not confirm_official:
+        raise typer.BadParameter("导入前需确认 HTML 来自官方域名")
+    cfg = load_settings()
+    spec = next((item for item in cfg.registries if item.id == registry), None)
+    if not spec:
+        raise typer.BadParameter("未知名录 id")
+    proof_url = public_url(proof_url)
+    if not spec.domains or not on_domains(proof_url, spec.domains):
+        raise typer.BadParameter("依据 URL 不在该名录配置的官方域名范围")
+    if not file.is_file() or file.stat().st_size > 20_000_000:
+        raise typer.BadParameter("HTML 文件不存在或超过 20MB")
+    raw = file.read_bytes()
+    db = initialize(cfg)
+    try:
+        result = save_registry(
+            db,
+            cfg,
+            spec,
+            raw.decode("utf-8", "replace"),
+            pages=[{"url": proof_url, "raw": raw}],
+            status="imported",
+            publication=published_at or None,
+            provenance={
+                "acquisition": "manual_official_html",
+                "scope": spec.scope,
+                "complete": False,
+                "note": note or "人工保存官方 HTML；未由程序直接请求。",
+            },
+        )
+        output(result)
+    finally:
+        db.engine.dispose()
 
 
 @app.command("registry-import")

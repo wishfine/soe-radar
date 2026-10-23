@@ -31,6 +31,20 @@ class Employer(Base):
     industry: Mapped[str] = mapped_column(String, default="综合")
 
 
+class Relationship(Base):
+    __tablename__ = "relationships"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
+    parent_id: Mapped[str] = mapped_column(ForeignKey("employers.id"), index=True)
+    child_id: Mapped[str] = mapped_column(ForeignKey("employers.id"), index=True)
+    relation_type: Mapped[str] = mapped_column(String, default="subsidiary")
+    evidence_url: Mapped[str] = mapped_column(String)
+    quote: Mapped[str] = mapped_column(Text)
+    evidence_date: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="confirmed")
+    created_at: Mapped[str] = mapped_column(String, default=stamp)
+    __table_args__ = (UniqueConstraint("parent_id", "child_id"),)
+
+
 class Activity(Base):
     __tablename__ = "activities"
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)

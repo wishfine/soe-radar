@@ -111,3 +111,93 @@ def test_orphan_parser_guesses_are_not_counted_as_companies(tmp_path):
     with db.session() as s:
         s.add(Employer(name="示例集团总行社会公开招聘"))
     assert "示例集团总行社会公开招聘" not in [r["name"] for r in coverage_report(db, cfg)["items"]]
+
+
+def test_two_column_and_multi_page_registry_parsing(tmp_path):
+    from soe_radar.config import RegistryConfig
+    from soe_radar.coverage import coverage_report, parse_registry, save_registry
+
+    spec = RegistryConfig(
+        id="pairs",
+        name="双列名录",
+        category="central",
+        url="https://example.gov.cn/list",
+        domains=["example.gov.cn"],
+        adapter="table",
+        min_entries=3,
+    )
+    html = (
+        "<table><tr><td>序号</td><td>企业名称</td><td></td><td>序号</td><td>企业名称</td></tr>"
+        "<tr><td>1</td><td>示例一集团有限公司</td><td></td><td>3</td><td>示例三有限责任公司</td></tr>"
+        "<tr><td>2</td><td>示例二集团有限公司</td><td></td><td></td><td></td></tr></table>"
+    )
+    entries = parse_registry(html, spec)
+    assert [row["name"] for row in entries] == [
+        "示例一集团有限公司",
+        "示例三有限责任公司",
+        "示例二集团有限公司",
+    ]
+
+    cfg = Settings.model_validate(
+        {
+            "data_dir": str(tmp_path / "data"),
+            "registries": [spec.model_dump()],
+        }
+    )
+    db = initialize(cfg)
+    pages = [
+        {"url": spec.url, "raw": html.encode()},
+        {
+            "url": "https://example.gov.cn/list_1",
+            "raw": "<table><tr><td>4</td><td>示例四有限公司</td></tr></table>".encode(),
+        },
+    ]
+    save_registry(db, cfg, cfg.registries[0], "\n".join(p["raw"].decode() for p in pages), pages=pages)
+    report = coverage_report(db, cfg)
+    row = report["registries"][0]
+    assert row["count"] == 4
+    assert row["provenance"]["pagination_complete"] is True
+    assert len(row["provenance"]["pages"]) == 2
+
+
+def test_text_directory_keeps_aliases_and_separates_profile_links(tmp_path):
+    from soe_radar.config import RegistryConfig
+    from soe_radar.coverage import parse_registry
+
+    spec = RegistryConfig(
+        id="text",
+        name="文本名录",
+        category="local",
+        url="https://example.gov.cn/list",
+        domains=["example.gov.cn"],
+        adapter="text",
+        entry_selector=".mainContent",
+        min_entries=2,
+    )
+    html = (
+        '<div class="mainContent">监管企业名录 示例一集团有限公司 '
+        "示例二集团有限责任公司（示例二有限公司）</div>"
+    )
+    assert [row["name"] for row in parse_registry(html, spec)] == [
+        "示例一集团有限公司",
+        "示例二集团有限责任公司（示例二有限公司）",
+    ]
+
+    links = RegistryConfig(
+        id="links",
+        name="链接名录",
+        category="local",
+        url="https://example.gov.cn/list",
+        domains=["example.gov.cn"],
+        adapter="links",
+        entry_selector="#companies a",
+        min_entries=2,
+    )
+    html = (
+        '<div id="companies"><a href="https://one.example/">示例一集团有限公司</a>'
+        '<a href="/profile">示例二有限责任公司</a></div>'
+    )
+    rows = {row["name"]: row for row in parse_registry(html, links)}
+    assert rows["示例一集团有限公司"]["official_url"] == "https://one.example/"
+    assert rows["示例二有限责任公司"]["official_url"] == ""
+    assert rows["示例二有限责任公司"]["profile_url"].endswith("/profile")

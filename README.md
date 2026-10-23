@@ -121,6 +121,14 @@ employers:
 uv run soe-radar coverage --cohort 2027
 uv run soe-radar registry-refresh --ids central-sasac,central-mof
 uv run soe-radar doctor --network --source sasac --source boc
+# 自动请求被 TLS 链或超时阻断时，可保存官方 HTML 后人工导入并保留来源说明
+uv run soe-radar registry-import-html --registry central-sasac --file 官方页面.html \
+  --proof-url https://官方域名/页面 --published-at 2026-07-11 --confirm-official
+# 只录入有官方原文片段和日期的母子公司关系；缺证据会拒绝
+uv run soe-radar relationship-add --parent 母公司全称 --child 子公司全称 \
+  --evidence-url https://官方域名/关系页面 --quote "原文片段" --evidence-date 2026-10-23
+# 生成可复核交付：底册清单、企业、关系、来源、缺口、证据哈希
+uv run soe-radar delivery-export --out delivery
 ```
 
 `coverage` 的默认届别为运行时下一届，也可明确指定；名单、招聘季和原文年份不会被自动改写。配置 `registries` 按 `id` 合并，空列表关闭名录刷新。名录读取成功每七天复查、失败每日重试，失败保留已有名单和历史。网页“全国覆盖”列出未知分母和未接入地区，并支持导入已核对的官方 CSV：

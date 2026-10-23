@@ -1,0 +1,111 @@
+import json
+
+import pytest
+
+from soe_radar.config import Settings
+from soe_radar.coverage import save_registry
+from soe_radar.db import initialize
+from soe_radar.delivery import export_delivery
+from soe_radar.relationships import add_relationship
+
+
+def delivery_settings(tmp_path):
+    return Settings.model_validate(
+        {
+            "data_dir": str(tmp_path / "data"),
+            "registries": [
+                {
+                    "id": "central",
+                    "name": "示例官方底册",
+                    "category": "central_sasac",
+                    "url": "https://example.gov.cn/list",
+                    "domains": ["example.gov.cn"],
+                    "min_entries": 1,
+                }
+            ],
+            "sources": [
+                {
+                    "id": "parent",
+                    "name": "示例集团",
+                    "employer": "示例集团有限公司",
+                    "url": "https://example.org/jobs",
+                    "domains": ["example.org"],
+                }
+            ],
+        }
+    )
+
+
+def test_delivery_export_writes_evidence_and_separates_relationships(tmp_path):
+    cfg = delivery_settings(tmp_path)
+    db = initialize(cfg)
+    save_registry(
+        db,
+        cfg,
+        cfg.registries[0],
+        "<table><tr><td>1</td><td>示例子公司有限公司</td></tr></table>",
+    )
+    add_relationship(
+        db,
+        "示例集团有限公司",
+        "示例子公司有限公司",
+        evidence_url="https://example.org/group",
+        quote="示例子公司有限公司为示例集团有限公司所属企业。",
+        evidence_date="2026-01-02",
+    )
+    summary = export_delivery(db, cfg, tmp_path / "delivery")
+    assert summary["registry_entries"] == 1
+    assert summary["relationships_confirmed"] == 1
+    assert (tmp_path / "delivery" / "registry_manifest.csv").is_file()
+    assert (tmp_path / "delivery" / "employers.jsonl").is_file()
+    assert (tmp_path / "delivery" / "relationships.jsonl").is_file()
+    assert (tmp_path / "delivery" / "recruitment_sources.csv").is_file()
+    assert (tmp_path / "delivery" / "gaps.csv").is_file()
+    assert (tmp_path / "delivery" / "evidence" / "SHA256SUMS").is_file()
+    relationships = [
+        json.loads(line) for line in (tmp_path / "delivery" / "relationships.jsonl").read_text().splitlines()
+    ]
+    assert relationships[0]["母公司"] == "示例集团有限公司"
+    assert relationships[0]["原文片段"].startswith("示例子公司")
+    employers = {
+        row["原始名称"]: row
+        for row in map(json.loads, (tmp_path / "delivery" / "employers.jsonl").read_text().splitlines())
+    }
+    assert employers["示例子公司有限公司"]["主管口径"] == "central_sasac"
+
+
+def test_relationship_requires_evidence_and_rejects_cycles(tmp_path):
+    cfg = delivery_settings(tmp_path)
+    db = initialize(cfg)
+    save_registry(
+        db,
+        cfg,
+        cfg.registries[0],
+        "<table><tr><td>1</td><td>示例子公司有限公司</td></tr></table>",
+    )
+    with pytest.raises(ValueError, match="证据"):
+        add_relationship(
+            db,
+            "示例集团有限公司",
+            "示例子公司有限公司",
+            evidence_url="",
+            quote="",
+            evidence_date="",
+        )
+    add_relationship(
+        db,
+        "示例集团有限公司",
+        "示例子公司有限公司",
+        evidence_url="https://example.org/group",
+        quote="所属企业",
+        evidence_date="2026-01-02",
+    )
+    with pytest.raises(ValueError, match="循环"):
+        add_relationship(
+            db,
+            "示例子公司有限公司",
+            "示例集团有限公司",
+            evidence_url="https://example.org/group",
+            quote="错误方向",
+            evidence_date="2026-01-02",
+        )

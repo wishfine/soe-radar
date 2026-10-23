@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from .schemas import Claim, DeadlineKind, DocumentInput, ExtractionResult, Position
 
-PARSER_VERSION = "2026-10-v11"
+PARSER_VERSION = "2026-10-v12"
 DATE_RE = re.compile(
     r"(?<!\d)(?<!\d:)(?<!\d：)(?:(20\d{2})\s*[年./\-]\s*)?(\d{1,2})\s*[月./\-]\s*(\d{1,2})(?![\d:：])\s*日?"
 )
@@ -167,7 +167,7 @@ def extract_rules(document: DocumentInput) -> ExtractionResult:
     ):
         result.employer = subject
     if re.search(
-        r"拟录用|拟接收|情况公示|笔试通知|面试通知|系统.{0,5}(?:升级|维护)|网站.{0,5}(?:升级|维护)|停机|暂停服务",
+        r"拟录用|拟接收|拟聘|情况公示|结果公示|招聘结果|录用结果|面试成绩|笔试成绩|笔试通知|面试通知|系统.{0,5}(?:升级|维护)|网站.{0,5}(?:升级|维护)|停机|暂停服务",
         title,
     ):
         result.recruitment_type = "notice"
