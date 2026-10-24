@@ -580,71 +580,118 @@ def registry_failure(db, registry_id, reason):
 
 
 def repair_registry_snapshots(db, *, apply=False):
-    """Recompute version digests and per-entry page bindings for legacy snapshots."""
+    """Recompute version digests and repair per-entry page bindings, idempotently."""
     plans = []
     with db.session() as s:
         snapshots = list(s.scalars(select(RegistrySnapshot)))
         for snapshot in snapshots:
             pages = (snapshot.provenance or {}).get("pages") or []
-            if not pages or (snapshot.provenance or {}).get("digest_repaired_from"):
+            if not pages:
                 continue
             raw_pages = []
+            page_text = {}
             for page in pages:
                 source = Path(db.path).parent / page.get("path", "")
                 if not source.is_file():
                     raw_pages = []
                     break
-                raw_pages.append({"url": page["url"], "raw": source.read_bytes()})
+                raw = source.read_bytes()
+                raw_pages.append({"url": page["url"], "raw": raw})
+                page_text[page["sha256"]] = BeautifulSoup(
+                    raw.decode("utf-8", "replace"), "html.parser"
+                ).get_text(" ", strip=True)
             if not raw_pages:
-                plans.append(
-                    {
-                        "id": snapshot.id,
-                        "registry_id": snapshot.registry_id,
-                        "old_digest": snapshot.digest,
-                        "new_digest": None,
-                        "skipped": "原件缺失，无法重算",
-                    }
-                )
                 continue
             correct = snapshot_digest(raw_pages)
-            if snapshot.digest != correct:
+            path_by_sha = {page["sha256"]: page for page in pages}
+            path_by_url = {page["url"]: page for page in pages}
+            repaired_entries = []
+            binding_changes = 0
+            unresolved = 0
+            for entry in snapshot.entries:
+                item = dict(entry)
+                page = path_by_sha.get(item.get("page_sha256")) or path_by_url.get(item.get("page_url"))
+                if not page:
+                    name = item.get("source_name") or item.get("name", "")
+                    matches = [
+                        candidate
+                        for candidate in pages
+                        if name
+                        and name.replace(" ", "") in page_text.get(candidate["sha256"], "").replace(" ", "")
+                    ]
+                    page = matches[0] if len(matches) == 1 else None
+                if page:
+                    if (
+                        item.get("page_path") != page["path"]
+                        or item.get("page_sha256") != page["sha256"]
+                        or item.get("page_url") != page["url"]
+                    ):
+                        binding_changes += 1
+                    item["page_path"] = page["path"]
+                    item["page_sha256"] = page["sha256"]
+                    item["page_url"] = page["url"]
+                    item.pop("page_binding", None)
+                else:
+                    item["page_binding"] = "needs_review"
+                    unresolved += 1
+                repaired_entries.append(item)
+            repaired = (snapshot.provenance or {}).get("digest_repaired_from")
+            digest_changed = snapshot.digest != correct and not repaired
+            if digest_changed or binding_changes or unresolved:
                 plans.append(
                     {
                         "id": snapshot.id,
                         "registry_id": snapshot.registry_id,
                         "old_digest": snapshot.digest,
                         "new_digest": correct,
+                        "digest_changed": digest_changed,
+                        "binding_changes": binding_changes,
+                        "unresolved_entries": unresolved,
+                        "entries": repaired_entries,
+                        "pages": pages,
+                        "old_provenance": dict(snapshot.provenance or {}),
                     }
                 )
         if not apply:
-            return plans
+            return [
+                {
+                    key: value
+                    for key, value in plan.items()
+                    if key not in ("entries", "pages", "old_provenance")
+                }
+                for plan in plans
+            ]
         for plan in plans:
-            if not plan.get("new_digest"):
-                continue
             snapshot = s.get(RegistrySnapshot, plan["id"])
-            pages = (snapshot.provenance or {}).get("pages") or []
             correct = plan["new_digest"]
-            existing = s.scalar(
-                select(RegistrySnapshot).where(
-                    RegistrySnapshot.registry_id == snapshot.registry_id,
-                    RegistrySnapshot.digest == correct,
-                    RegistrySnapshot.id != snapshot.id,
+            if plan["digest_changed"]:
+                existing = s.scalar(
+                    select(RegistrySnapshot).where(
+                        RegistrySnapshot.registry_id == snapshot.registry_id,
+                        RegistrySnapshot.digest == correct,
+                        RegistrySnapshot.id != snapshot.id,
+                    )
                 )
-            )
-            if existing:
-                correct = hashlib.sha256((correct + snapshot.id).encode()).hexdigest()
-            provenance = dict(snapshot.provenance or {})
-            provenance["digest_repaired_from"] = plan["old_digest"]
-            provenance["digest_repair_note"] = "旧版整页摘要被末页摘要覆盖；按全部页面内容与解析版本重算。"
-            path_by_sha = {page["sha256"]: page for page in pages}
-            for entry in snapshot.entries:
-                page = path_by_sha.get(entry.get("page_sha256"))
-                if page:
-                    entry["page_url"] = entry.get("page_url") or page["url"]
-                    entry["page_path"] = page["path"]
-            snapshot.digest = correct
-            snapshot.provenance = provenance
-        return plans
+                if existing:
+                    correct = hashlib.sha256((correct + snapshot.id).encode()).hexdigest()
+                provenance = dict(snapshot.provenance or {})
+                provenance["digest_repaired_from"] = plan["old_digest"]
+                provenance["digest_repair_note"] = (
+                    "旧版整页摘要被末页摘要覆盖；按全部页面内容与解析版本重算。"
+                )
+                snapshot.digest = correct
+                snapshot.provenance = provenance
+            if plan["binding_changes"] or plan["unresolved_entries"]:
+                provenance = dict(snapshot.provenance or {})
+                provenance["page_binding_repaired"] = plan["binding_changes"]
+                if plan["unresolved_entries"]:
+                    provenance["page_binding_unresolved"] = plan["unresolved_entries"]
+                snapshot.entries = plan["entries"]
+                snapshot.provenance = provenance
+        return [
+            {key: value for key, value in plan.items() if key not in ("entries", "pages", "old_provenance")}
+            for plan in plans
+        ]
 
 
 async def refresh_registries(db, cfg, ids=None, *, fetcher=None):

@@ -564,3 +564,77 @@ def test_merge_different_confirmed_parents_keeps_one_and_marks_other_review(tmp_
         statuses = {edge.parent_id: edge.status for edge in edges}
         assert statuses[first_id] == "confirmed"
         assert any(status == "needs_review" for status in statuses.values())
+
+
+def test_explicit_relationship_downgrade_and_reconfirm_round_trip(tmp_path):
+    from sqlalchemy import select
+
+    from soe_radar.models import Employer, Relationship
+    from soe_radar.relationships import add_relationship
+
+    db = initialize(Settings.model_validate({"data_dir": str(tmp_path / "data")}))
+    with db.session() as s:
+        s.add_all([Employer(name="示例母公司有限公司"), Employer(name="示例子公司有限公司")])
+    evidence = {
+        "evidence_url": "https://example.org/about",
+        "quote": "母公司全资持有子公司",
+        "evidence_date": "2026-01-01",
+    }
+    add_relationship(db, "示例母公司有限公司", "示例子公司有限公司", **evidence)
+    add_relationship(db, "示例母公司有限公司", "示例子公司有限公司", status="needs_review", **evidence)
+    with db.session() as s:
+        relation = s.scalar(select(Relationship))
+        child = s.get(Employer, relation.child_id)
+        assert relation.status == "needs_review"
+        assert child.parent_id is None
+        assert len(relation.provenance) == 2
+    add_relationship(db, "示例母公司有限公司", "示例子公司有限公司", **evidence)
+    with db.session() as s:
+        relation = s.scalar(select(Relationship))
+        child = s.get(Employer, relation.child_id)
+        assert relation.status == "confirmed"
+        assert child.parent_id == relation.parent_id
+    with pytest.raises(ValueError, match="状态"):
+        add_relationship(
+            db,
+            "示例母公司有限公司",
+            "示例子公司有限公司",
+            status="unknown",
+            **evidence,
+        )
+
+
+def test_snapshot_repair_persists_page_bindings_and_is_idempotent(tmp_path):
+    from soe_radar.coverage import repair_registry_snapshots, save_registry
+    from soe_radar.models import RegistrySnapshot
+
+    cfg = Settings.model_validate(
+        {
+            "data_dir": str(tmp_path / "data"),
+            "registries": [
+                {
+                    "id": "repair",
+                    "name": "修复",
+                    "category": "local",
+                    "url": "https://example.gov.cn/list",
+                    "domains": ["example.gov.cn"],
+                }
+            ],
+        }
+    )
+    db = initialize(cfg)
+    saved = save_registry(
+        db, cfg, cfg.registries[0], "<table><tr><td>1</td><td>示例一有限公司</td></tr></table>"
+    )
+    with db.session() as s:
+        row = s.get(RegistrySnapshot, saved["id"])
+        entries = [dict(entry) for entry in row.entries]
+        entries[0]["page_path"] = "registries/broken.html"
+        row.entries = entries
+        row.digest = "legacy-digest"
+    repair_registry_snapshots(db, apply=True)
+    with db.session() as s:
+        row = s.get(RegistrySnapshot, saved["id"])
+        assert row.entries[0]["page_path"] == row.provenance["pages"][0]["path"]
+        assert row.digest != "legacy-digest"
+    assert repair_registry_snapshots(db, apply=False) == []

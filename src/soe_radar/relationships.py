@@ -21,6 +21,8 @@ def add_relationship(
     evidence_date,
     status="confirmed",
 ):
+    if status not in ("confirmed", "needs_review"):
+        raise ValueError("关系状态只能是 confirmed 或 needs_review")
     if not evidence_url or not quote.strip() or not evidence_date:
         raise ValueError("母子公司关系必须同时提供证据URL、原文片段和日期")
     public_url(evidence_url)
@@ -68,19 +70,21 @@ def add_relationship(
             provenance.append(evidence)
         record.provenance = provenance
         record.relation_type = relation_type
-        if status == "confirmed" and record.status != "confirmed":
+        # The explicit status argument controls the current review state. Old evidence
+        # remains in provenance, but a deliberate downgrade must not be silently ignored.
+        record.status = status
+        if status == "confirmed":
             record.evidence_url = evidence_url
             record.quote = quote.strip()[:5000]
             record.evidence_date = evidence_date
-        elif not record.evidence_url:
-            record.evidence_url = evidence_url
-            record.quote = quote.strip()[:5000]
-            record.evidence_date = evidence_date
-        record.status = "confirmed" if status == "confirmed" or record.status == "confirmed" else status
-        if record.status == "confirmed":
             child.parent_id = parent.id
-        elif child.parent_id == parent.id:
-            child.parent_id = None
+        else:
+            if not record.evidence_url:
+                record.evidence_url = evidence_url
+                record.quote = quote.strip()[:5000]
+                record.evidence_date = evidence_date
+            if child.parent_id == parent.id:
+                child.parent_id = None
         s.flush()
         return {
             "id": record.id,
