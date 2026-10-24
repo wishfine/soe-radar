@@ -1,0 +1,167 @@
+{
+  "baseline": "backups/before-nationwide-20261023.tar.gz",
+  "database": "data/radar.db",
+  "counts": {
+    "baseline_opportunities": 226,
+    "current_opportunities": 354,
+    "new_opportunity_ids": 128,
+    "removed_or_merged_ids": 0,
+    "new_campus": 28,
+    "new_campus_2027": 12
+  },
+  "new_campus_2027": [
+    {
+      "id": "e88cd9245b5b45c18e6a14d62faf4a43",
+      "source_id": "hunan-sasac",
+      "title": "“新”火湘承 能创未来—湖南能源集团2027届校园招聘正式启动 - 湖南省国资委",
+      "cohorts": "[2027]",
+      "season": "",
+      "review_status": "pending",
+      "published_at": "2026-09-20",
+      "official_url": "https://gzw.hunan.gov.cn/gzw/xxgk_71571/tzgg/202609/t20260920_34068052.html"
+    },
+    {
+      "id": "8010728c9ddc4115b3d2196f2dc7605d",
+      "source_id": "cq-sasac",
+      "title": "重庆登康口腔护理用品股份有限公司2027届校园招聘公告",
+      "cohorts": "[2027]",
+      "season": "",
+      "review_status": "auto",
+      "published_at": "2026-10-10",
+      "official_url": "https://gzw.cq.gov.cn/gqzp/202610/t20261010_16213695.html"
+    },
+    {
+      "id": "f300545d6d5c47259a1190ca6f137129",
+      "source_id": "cq-sasac",
+      "title": "220人！重庆农村商业银行2027年校园招聘公告",
+      "cohorts": "[2027]",
+      "season": "",
+      "review_status": "pending",
+      "published_at": "2026-10-10",
+      "official_url": "https://gzw.cq.gov.cn/gqzp/202610/t20261010_16213703.html"
+    },
+    {
+      "id": "ffd98d91bfa64bc886dfc5db14367940",
+      "source_id": "hlj-sasac",
+      "title": "2026年度黑龙江省铁路集团宝清铁路有限公司校园招聘公告",
+      "cohorts": "[2026, 2027]",
+      "season": "",
+      "review_status": "pending",
+      "published_at": "2026-10-13",
+      "official_url": "https://gzw.hlj.gov.cn/gzw/c104272/202610/c00_31983626.shtml"
+    },
+    {
+      "id": "d4d749dd655c4efe8e39a24ac3f978b0",
+      "source_id": "cq-sasac",
+      "title": "重庆渝富控股集团有限公司所属企业校园招聘公告",
+      "cohorts": "[2027]",
+      "season": "",
+      "review_status": "auto",
+      "published_at": "2026-10-15",
+      "official_url": "https://gzw.cq.gov.cn/gqzp/202610/t20261015_16238036.html"
+    },
+    {
+      "id": "e94799c942bf4083bfb37a156820a878",
+      "source_id": "cq-sasac",
+      "title": "重庆机场集团有限公司2027年校园招聘公告",
+      "cohorts": "[2027]",
+      "season": "",
+      "review_status": "pending",
+      "published_at": "2026-10-15",
+      "official_url": "https://gzw.cq.gov.cn/gqzp/202610/t20261015_16238008.html"
+    },
+    {
+      "id": "a241de8bbed44d3e9f4a1631f51cb6d5",
+      "source_id": "csg",
+      "title": "中国南方电网有限责任公司人才发展中心2027年校园招聘公告",
+      "cohorts": "[2027]",
+      "season": "",
+      "review_status": "pending",
+      "published_at": "2026-10-19",
+      "official_url": "https://zhaopin.csg.cn/#/notice-details?id=31C81703BD6844D5B28557CCC3E42DC0&recuitType=1"
+    },
+    {
+      "id": "c238e0df10bc4f019fd4097ce89189c7",
+      "source_id": "csg",
+      "title": "中国南方电网有限责任公司共享运营公司2027年校园招聘公告",
+      "cohorts": "[2027]",
+      "season": "",
+      "review_status": "pending",
+      "published_at": "2026-10-19",
+      "official_url": "https://zhaopin.csg.cn/#/notice-details?id=39C5742596A6471C9F94B1F4E3B5BF12&recuitType=1"
+    },
+    {
+      "id": "1945ccf706754e8980c66676c6777373",
+      "source_id": "ncss",
+      "title": "甘肃农商银行 · 综合业务岗",
+      "cohorts": "[2027]",
+      "season": "",
+      "review_status": "pending",
+      "published_at": "2026-10-23",
+      "official_url": "https://www.ncss.cn/student/jobs/W2XofnnkEon6KfMnFextNP/detail.html"
+    },
+    {
+      "id": "3b8d5039539c4be8aa6b3b9ba83544be",
+      "source_id": "ncss",
+      "title": "中建三局集团（新疆）有限公司（乌鲁木齐） · 土木工程师",
+      "cohorts": "[2027]",
+      "season": "",
+      "review_status": "pending",
+      "published_at": "2026-10-23",
+      "official_url": "https://www.ncss.cn/student/jobs/3YwAmDB1dVRzrXfii718mU/detail.html"
+    },
+    {
+      "id": "58c0aa547b16451ea41a52caa0bac517",
+      "source_id": "ncss",
+      "title": "新疆绿色电力能源有限公司 · 综合职能类",
+      "cohorts": "[2027]",
+      "season": "",
+      "review_status": "pending",
+      "published_at": "2026-10-23",
+      "official_url": "https://www.ncss.cn/student/jobs/MSX5bueb8CJaQTkfQMvMQs/detail.html"
+    },
+    {
+      "id": "a4c2e2dcd11346c381f74468b0e8623a",
+      "source_id": "ncss",
+      "title": "兰州银行股份有限公司 · 金融管培生",
+      "cohorts": "[2027]",
+      "season": "",
+      "review_status": "pending",
+      "published_at": "2026-10-23",
+      "official_url": "https://www.ncss.cn/student/jobs/JAktSQDZuRBCjS4xZArNbi/detail.html"
+    }
+  ],
+  "new_campus_all_ids": [
+    "0b4ecc35bc4f4ea98adc94afc49fdd45",
+    "1945ccf706754e8980c66676c6777373",
+    "2dc42281094e43a8b8b3910d2c8bd52a",
+    "3b8d5039539c4be8aa6b3b9ba83544be",
+    "52220486026d4326bf62d66932494362",
+    "52960a55f43641f5a235ab96e037c9be",
+    "52a41b13df3b43199d69f8a423f4898b",
+    "58c0aa547b16451ea41a52caa0bac517",
+    "6759cc016edd4ce3ab84f12d0ad72159",
+    "7132e67e47e045068a994d35243f5fad",
+    "8010728c9ddc4115b3d2196f2dc7605d",
+    "8844ec9a1c154a78b50eaaab3d1eef1b",
+    "90a8cf8f67bc4e8e863e211c6481f2f1",
+    "a241de8bbed44d3e9f4a1631f51cb6d5",
+    "a4c2e2dcd11346c381f74468b0e8623a",
+    "b036d53b796445eeac8d2691f4f9a676",
+    "c238e0df10bc4f019fd4097ce89189c7",
+    "caa9c222b29c4b23869c31bdaaaaedf3",
+    "cc21a90d905748f8b8f14ad9312d8604",
+    "d4d749dd655c4efe8e39a24ac3f978b0",
+    "d62e0554878d4920b9703747e675a5a2",
+    "d9f20289cb9c470da648880edb32b478",
+    "db194e12d0c542e7b434601ef1d9db55",
+    "e78d2c41075d4ac3a7e0a8b3814b1623",
+    "e88cd9245b5b45c18e6a14d62faf4a43",
+    "e94799c942bf4083bfb37a156820a878",
+    "f300545d6d5c47259a1190ca6f137129",
+    "ffd98d91bfa64bc886dfc5db14367940"
+  ],
+  "removed_or_merged_ids": [],
+  "missing_required_fields": [],
+  "note": "新增 ID 差集只证明数据库变化，不证明全国招聘覆盖；未取得的企业仍在 gaps.csv。"
+}

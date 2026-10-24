@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-10-23T12:38:52.999584+00:00",
+  "generated_at": "2026-10-24T02:27:26.145835+00:00",
   "registry_rows": 40,
   "registry_rows_with_live_snapshot": 12,
   "registry_entries": 456,
-  "employers": 463,
-  "relationships_confirmed": 3,
+  "employers": 458,
+  "relationships_confirmed": 2,
   "sources": 17,
-  "gaps": 501,
+  "gaps": 503,
   "gap_types": {
     "未建档": 28,
     "历史名单待更新": 2,
@@ -14,7 +14,8 @@
     "分页未完": 3,
     "访问受阻": 5,
     "当届未发现": 4,
-    "入口未找到": 447,
+    "入口未找到": 448,
+    "关系待复核": 1,
     "截止待补证": 8
   },
   "evidence_files": 58,

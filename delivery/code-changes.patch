@@ -18,13 +18,28 @@ index 328dc7b..be4e4c4 100644
  
  `coverage` 的默认届别为运行时下一届，也可明确指定；名单、招聘季和原文年份不会被自动改写。配置 `registries` 按 `id` 合并，空列表关闭名录刷新。名录读取成功每七天复查、失败每日重试，失败保留已有名单和历史。网页“全国覆盖”列出未知分母和未接入地区，并支持导入已核对的官方 CSV：
 diff --git a/src/soe_radar/cli.py b/src/soe_radar/cli.py
-index 3e3e9ab..b3e90d2 100644
+index 3e3e9ab..3cbd803 100644
 --- a/src/soe_radar/cli.py
 +++ b/src/soe_radar/cli.py
-@@ -190,6 +190,51 @@ def doctor(
+@@ -190,6 +190,68 @@ def doctor(
      db.engine.dispose()
  
  
++@app.command("employer-merge-aliases")
++def employer_merge_aliases(
++    apply: bool = typer.Option(False, "--apply", help="实际合并；默认只预览"),
++):
++    """合并括号别名/全半角括号造成的重复企业身份，保留活动、关系和审核记录。"""
++    from .identity import merge_alias_employers
++
++    cfg = load_settings()
++    db = initialize(cfg)
++    try:
++        output({"plans": merge_alias_employers(db, apply=apply), "applied": apply})
++    finally:
++        db.engine.dispose()
++
++
 +@app.command("relationship-add")
 +def relationship_add(
 +    parent: str = typer.Option(..., help="母公司全称，必须已建档"),
@@ -33,6 +48,7 @@ index 3e3e9ab..b3e90d2 100644
 +    quote: str = typer.Option(..., help="官方原文中说明隶属关系的片段"),
 +    evidence_date: str = typer.Option(..., help="证据发布日期 YYYY-MM-DD"),
 +    relation_type: str = typer.Option("subsidiary", help="关系类型"),
++    status: str = typer.Option("confirmed", help="confirmed 或 needs_review"),
 +):
 +    """录入有原文证据的母子公司关系；缺证据时拒绝写入。"""
 +    from .relationships import add_relationship
@@ -49,6 +65,7 @@ index 3e3e9ab..b3e90d2 100644
 +                evidence_url=evidence_url,
 +                quote=quote,
 +                evidence_date=evidence_date,
++                status=status,
 +            )
 +        )
 +    finally:
@@ -73,7 +90,7 @@ index 3e3e9ab..b3e90d2 100644
  @app.command("coverage")
  def coverage(cohort: int | None = None):
      """列出已知企业、未接入名录、网络受阻与当届活动覆盖。全国分母未知时不造覆盖率。"""
-@@ -215,6 +260,53 @@ def registry_refresh(ids: str | None = typer.Option(None, help="逗号分隔名
+@@ -215,6 +277,61 @@ def registry_refresh(ids: str | None = typer.Option(None, help="逗号分隔名
      db.engine.dispose()
  
  
@@ -84,6 +101,11 @@ index 3e3e9ab..b3e90d2 100644
 +    proof_url: str = typer.Option(..., "--proof-url", help="页面官方 URL"),
 +    published_at: str = typer.Option("", help="页面可见发布日期 YYYY-MM-DD"),
 +    note: str = typer.Option("", help="取得方式、TLS/验证码等限制说明"),
++    tls_verified: bool = typer.Option(
++        False,
++        "--tls-verified/--tls-unverified",
++        help="人工保存时是否完成了证书校验；默认不提升企业性质核验等级",
++    ),
 +    confirm_official: bool = typer.Option(False, "--confirm-official", help="确认页面来自官方域名"),
 +):
 +    """导入人工保存的官方 HTML；用于自动抓取被 TLS 链或超时阻断时留证。"""
@@ -113,7 +135,10 @@ index 3e3e9ab..b3e90d2 100644
 +            status="imported",
 +            publication=published_at or None,
 +            provenance={
-+                "acquisition": "manual_official_html",
++                "acquisition": "manual_official_html"
++                if tls_verified
++                else "manual_official_html_unverified_tls",
++                "tls_verified": tls_verified,
 +                "scope": spec.scope,
 +                "complete": False,
 +                "note": note or "人工保存官方 HTML；未由程序直接请求。",
@@ -155,7 +180,7 @@ index 790dac1..93a5ced 100644
  
  
 diff --git a/src/soe_radar/coverage.py b/src/soe_radar/coverage.py
-index 19dba35..a1e0538 100644
+index 19dba35..a5ce27f 100644
 --- a/src/soe_radar/coverage.py
 +++ b/src/soe_radar/coverage.py
 @@ -5,7 +5,7 @@ from __future__ import annotations
@@ -167,7 +192,7 @@ index 19dba35..a1e0538 100644
  
  from bs4 import BeautifulSoup
  from sqlalchemy import select
-@@ -14,14 +14,99 @@ from .models import Employer, Opportunity, RegistrySnapshot, RegistryState, Sour
+@@ -14,14 +14,119 @@ from .models import Employer, Opportunity, RegistrySnapshot, RegistryState, Sour
  from .schemas import local_now
  from .urls import on_domains, public_url
  
@@ -176,11 +201,29 @@ index 19dba35..a1e0538 100644
 +    r"(?:公司|集团|银行|出版社|报刊社|总局)"
 +    r"(?:[（(\[][^（）()\[\]]{2,80}[）)\]])?"
 +)
++ALIAS_RE = re.compile(r"^(.+?(?:公司|集团|银行|出版社|报刊社|总局))[\[（(](.+)[\]）)]$")
+ 
+-def parse_registry(html, spec):
++
++def split_alias(name):
++    """Split a display form like 中国旅游集团...[香港中旅...] into legal name and aliases."""
++    value = re.sub(r"\s+", "", name or "")
++    match = ALIAS_RE.fullmatch(value)
++    if not match:
++        return value, []
++    canonical, alias = match.group(1).strip(), match.group(2).strip()
++    aliases = [alias]
++    if value != canonical:
++        aliases.append(value)
++    return canonical, aliases
 +
 +
 +def _entry(name, *, official_url="", profile_url="", rank=None, quote=""):
++    canonical, aliases = split_alias(name)
 +    return {
-+        "name": name,
++        "name": canonical,
++        "source_name": name,
++        "aliases": aliases,
 +        "official_url": official_url,
 +        "profile_url": profile_url,
 +        "rank": rank,
@@ -227,8 +270,8 @@ index 19dba35..a1e0538 100644
 +        return True
 +    return False
 +
- 
- def parse_registry(html, spec):
++
++def parse_registry(html, spec, *, enforce_min=True):
      soup = BeautifulSoup(html, "html.parser")
      entries = {}
 -    if spec.adapter in ("links", "numbered"):
@@ -237,38 +280,41 @@ index 19dba35..a1e0538 100644
              raise ValueError("非表格名录必须配置正文选择器，不能从全站猜测企业名单")
          for node in soup.select(spec.entry_selector):
 +            if spec.adapter == "text":
-+                # Prefer one anchor per enterprise; fall back to whitespace-separated plain text.
++                # A directory can mix linked enterprises and plain-text enterprises in one node.
 +                anchors = [
 +                    anchor
 +                    for anchor in node.select("a[href]")
 +                    if _is_company(anchor.get_text(" ", strip=True).strip())
 +                ]
-+                if anchors:
-+                    for anchor in anchors:
-+                        name = anchor.get_text(" ", strip=True).strip()
-+                        name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", name).lstrip("（(【[")
-+                        if not _is_company(name):
-+                            continue
-+                        official_url, profile_url = _link_target(anchor, spec.url, name)
-+                        entries[name] = _entry(
-+                            name,
-+                            official_url=official_url,
-+                            profile_url=profile_url,
-+                            quote=name,
-+                        )
-+                    continue
-+                for token in node.get_text(" ", strip=True).split():
++                for anchor in anchors:
++                    name = anchor.get_text(" ", strip=True).strip()
++                    name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", name).lstrip("（(【[")
++                    if not _is_company(name):
++                        continue
++                    official_url, profile_url = _link_target(anchor, spec.url, name)
++                    entries[name] = _entry(
++                        name,
++                        official_url=official_url,
++                        profile_url=profile_url,
++                        quote=name,
++                    )
++                # Remove anchors from a copy before reading the remaining plain text.
++                clone = BeautifulSoup(str(node), "html.parser")
++                for anchor in clone.select("a[href]"):
++                    anchor.decompose()
++                plain_text = clone.get_text(" ", strip=True)
++                for token in plain_text.split():
 +                    name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", token)
 +                    if name.startswith(("（", "(", "【", "[")):
 +                        name = name.lstrip("（(【[").rstrip("）)】]")
 +                    if not _is_company(name):
 +                        continue
-+                    entries[name] = _entry(name, quote=token)
++                    entries.setdefault(name, _entry(name, quote=token))
 +                continue
              values = (
                  [node.get_text(" ", strip=True)]
                  if spec.adapter == "links"
-@@ -29,52 +114,116 @@ def parse_registry(html, spec):
+@@ -29,52 +134,179 @@ def parse_registry(html, spec):
              )
              for value in values:
                  name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", value).strip()
@@ -356,7 +402,8 @@ index 19dba35..a1e0538 100644
 +                    ),
 +                )
      entries = {name: entry for name, entry in entries.items() if name not in spec.exclude_names}
-     if len(entries) < spec.min_entries:
+-    if len(entries) < spec.min_entries:
++    if enforce_min and len(entries) < spec.min_entries:
          raise ValueError(f"名录未取得足够的编号企业行（{len(entries)}/{spec.min_entries}）；保留已有版本")
      return sorted(entries.values(), key=lambda x: x["name"])
  
@@ -398,9 +445,22 @@ index 19dba35..a1e0538 100644
 +    publication=None,
 +    error="",
 +    provenance=None,
++    activate=True,
 +):
      if not spec.url or not on_domains(spec.url, spec.domains):
          raise ValueError("名录缺少已确认的官方入口")
++    if pages:
++        return save_registry_pages(
++            db,
++            cfg,
++            spec,
++            pages,
++            status=status,
++            publication=publication,
++            error=error,
++            provenance=provenance,
++            activate=activate,
++        )
      entries = parse_registry(html, spec)
 -    return _save_entries(db, cfg, spec, entries, html.encode(), spec.url, "html", "success")
 +    return _save_entries(
@@ -412,15 +472,65 @@ index 19dba35..a1e0538 100644
 +        spec.url,
 +        "html",
 +        status,
-+        pages=pages,
 +        publication=publication or publication_date(html),
 +        error=error,
 +        provenance=provenance,
++        activate=activate,
++    )
++
++
++def save_registry_pages(
++    db,
++    cfg,
++    spec,
++    pages,
++    *,
++    status="success",
++    publication=None,
++    error="",
++    provenance=None,
++    activate=True,
++):
++    """Parse each page separately so every enterprise keeps its own page evidence."""
++    merged = {}
++    for index, page in enumerate(pages):
++        text = page["raw"].decode("utf-8", "replace")
++        page_digest = hashlib.sha256(page["raw"]).hexdigest()
++        parsed = parse_registry(text, spec, enforce_min=False)
++        for entry in parsed:
++            entry["page_url"] = page["url"]
++            entry["page_index"] = index
++            entry["page_sha256"] = page_digest
++            existing = merged.get(entry["name"])
++            if existing:
++                existing["aliases"] = list(
++                    dict.fromkeys([*existing.get("aliases", []), *entry.get("aliases", [])])
++                )
++            else:
++                merged[entry["name"]] = entry
++    entries = sorted(merged.values(), key=lambda x: x["name"])
++    if len(entries) < spec.min_entries:
++        raise ValueError(f"名录未取得足够的编号企业行（{len(entries)}/{spec.min_entries}）；保留已有版本")
++    combined = b"\n".join(page["raw"] for page in pages)
++    return _save_entries(
++        db,
++        cfg,
++        spec,
++        entries,
++        combined,
++        spec.url,
++        "html",
++        status,
++        pages=pages,
++        publication=publication or publication_date(pages[0]["raw"].decode("utf-8", "replace")),
++        error=error,
++        provenance=provenance,
++        activate=activate,
 +    )
  
  
  def import_registry_csv(db, cfg, spec, content, proof_url, *, confirmed=False):
-@@ -131,13 +280,72 @@ def import_registry_csv(db, cfg, spec, content, proof_url, *, confirmed=False):
+@@ -131,13 +363,81 @@ def import_registry_csv(db, cfg, spec, content, proof_url, *, confirmed=False):
      )
  
  
@@ -440,6 +550,7 @@ index 19dba35..a1e0538 100644
 +    pages=None,
 +    publication=None,
 +    error="",
++    activate=True,
 +):
      folder = cfg.data_dir / "registries"
      folder.mkdir(parents=True, exist_ok=True)
@@ -467,18 +578,26 @@ index 19dba35..a1e0538 100644
 +        digest = hashlib.sha256(digest_input).hexdigest()
 +    else:
 +        digest = hashlib.sha256(source_url.encode() + b"\0" + raw).hexdigest()
-+        path = folder / (digest + "." + extension)
++        content_digest = hashlib.sha256(raw).hexdigest()
++        path = folder / (content_digest + "." + extension)
 +        if not path.exists():
 +            path.write_bytes(raw)
 +        page_records = [
 +            {
 +                "url": source_url,
-+                "sha256": digest,
++                "sha256": content_digest,
 +                "path": str(path.relative_to(cfg.data_dir)),
 +                "fetched_at": stamp(),
 +            }
 +        ]
 +    raw_path = page_records[0]["path"]
++    path_by_sha = {record["sha256"]: record for record in page_records}
++    for entry in entries:
++        digest = entry.get("page_sha256") or page_records[0]["sha256"]
++        record = path_by_sha.get(digest, page_records[0])
++        entry.setdefault("page_url", record["url"])
++        entry.setdefault("page_sha256", record["sha256"])
++        entry["page_path"] = record["path"]
 +    details = dict(
 +        provenance
 +        or {
@@ -498,7 +617,7 @@ index 19dba35..a1e0538 100644
      with db.session() as s:
          snapshot = s.scalar(
              select(RegistrySnapshot).where(
-@@ -150,16 +358,14 @@ def _save_entries(db, cfg, spec, entries, raw, source_url, extension, status, *,
+@@ -150,32 +450,102 @@ def _save_entries(db, cfg, spec, entries, raw, source_url, extension, status, *,
                  digest=digest,
                  source_url=source_url,
                  entries=entries,
@@ -520,12 +639,91 @@ index 19dba35..a1e0538 100644
          state = s.get(RegistryState, spec.id)
          if not state:
              state = RegistryState(id=spec.id)
-@@ -174,8 +380,14 @@ def _save_entries(db, cfg, spec, entries, raw, source_url, extension, status, *,
-         state.active_snapshot_id = snapshot.id
+             s.add(state)
+-        # Missing enterprises remain in older versions; never delete their history.
++        # Match canonical names and confirmed aliases; never create a second identity for a display alias.
++        existing = list(s.scalars(select(Employer)))
++        by_name = {row.name: row for row in existing}
++        by_alias = {}
++        for row in existing:
++            for alias in row.aliases or []:
++                by_alias.setdefault(alias, row)
++        trusted = details.get("tls_verified", True)
+         for entry in entries:
+-            employer = s.scalar(select(Employer).where(Employer.name == entry["name"]))
++            canonical = entry["name"]
++            aliases = [value for value in entry.get("aliases", []) if value]
++            source_name = entry.get("source_name", canonical)
++            employer = by_name.get(canonical) or by_alias.get(canonical)
++            if not employer:
++                for alias in aliases:
++                    employer = by_name.get(alias) or by_alias.get(alias)
++                    if employer:
++                        break
+             if not employer:
+-                s.add(Employer(name=entry["name"], org_type="soe", proof_url=source_url, verified_at=stamp()))
+-            elif employer.org_type == "unknown":
+-                employer.org_type, employer.proof_url, employer.verified_at = "soe", source_url, stamp()
+-        state.active_snapshot_id = snapshot.id
++                employer = Employer(
++                    name=canonical,
++                    aliases=aliases,
++                    org_type="soe" if trusted else "unknown",
++                    proof_url=source_url,
++                    verified_at=stamp() if trusted else None,
++                )
++                s.add(employer)
++                by_name[canonical] = employer
++            else:
++                merged = list(dict.fromkeys([*(employer.aliases or []), *aliases, source_name]))
++                employer.aliases = [value for value in merged if value != employer.name]
++                if trusted:
++                    if employer.org_type == "unknown":
++                        employer.org_type, employer.proof_url, employer.verified_at = (
++                            "soe",
++                            source_url,
++                            stamp(),
++                        )
++                elif employer.proof_url == source_url and employer.org_type == "soe":
++                    # A manual/unverified-TLS list must not silently promote ownership verification.
++                    employer.org_type, employer.verified_at = "unknown", None
++            for alias in aliases + ([source_name] if source_name != canonical else []):
++                by_alias.setdefault(alias, employer)
++        if not trusted:
++            other_names = set()
++            for other in cfg.registries:
++                if other.id == spec.id:
++                    continue
++                other_state = s.get(RegistryState, other.id)
++                other_snapshot = (
++                    s.get(RegistrySnapshot, other_state.active_snapshot_id)
++                    if other_state and other_state.active_snapshot_id
++                    else None
++                )
++                if other_snapshot:
++                    other_names.update(entry["name"] for entry in other_snapshot.entries)
++            source_names = set()
++            for source in cfg.sources:
++                if source.employer:
++                    source_names.add(source.employer)
++                    source_names.update(source.aliases or [])
++            for entry in entries:
++                employer = by_name.get(entry["name"]) or by_alias.get(entry["name"])
++                if not employer:
++                    continue
++                covered = employer.name in other_names or employer.name in source_names
++                covered = covered or any(alias in source_names for alias in (employer.aliases or []))
++                if not covered and employer.proof_url and on_domains(employer.proof_url, spec.domains):
++                    employer.org_type, employer.verified_at = "unknown", None
++        if activate:
++            state.active_snapshot_id = snapshot.id
          state.status = status
-         state.last_success = state.last_attempt = stamp()
+-        state.last_success = state.last_attempt = stamp()
 -        state.last_error = ""
 -        return {"id": snapshot.id, "registry_id": spec.id, "count": len(entries), "digest": digest}
++        state.last_attempt = stamp()
++        if activate and status in ("success", "imported", "partial"):
++            state.last_success = state.last_attempt
 +        state.last_error = error[:300]
 +        return {
 +            "id": snapshot.id,
@@ -533,11 +731,12 @@ index 19dba35..a1e0538 100644
 +            "count": len(entries),
 +            "digest": digest,
 +            "pages": len(page_records),
++            "activated": activate,
 +        }
  
  
  def registry_failure(db, registry_id, reason):
-@@ -206,18 +418,43 @@ async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
+@@ -206,18 +576,50 @@ async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
                  results.append({"registry_id": spec.id, "status": "missing_entry"})
                  continue
              db.acquire("registry", owner, seconds=600)
@@ -563,6 +762,12 @@ index 19dba35..a1e0538 100644
 +                continue
 +            combined = "\n".join(page["raw"].decode("utf-8", "replace") for page in pages)
 +            status = "success" if not errors else "partial"
++            with db.session() as session:
++                current = session.get(RegistryState, spec.id)
++                has_active = bool(current and current.active_snapshot_id)
++            # Never replace a known membership set with a partial page set. The failed
++            # pages may contain enterprises that are absent from this fetch.
++            activate = not errors or not has_active
              try:
 -                response = await fetcher.get(
 -                    spec.url, spec.domains, network_mode=spec.network_mode, source_id="registry:" + spec.id
@@ -575,6 +780,7 @@ index 19dba35..a1e0538 100644
 +                    status=status,
 +                    publication=publication_date(pages[0]["raw"].decode("utf-8", "replace")),
 +                    error="；".join(errors),
++                    activate=activate,
                  )
 -                results.append({"status": "success", **save_registry(db, cfg, spec, response.text)})
 -            except Exception as exc:
@@ -829,10 +1035,10 @@ index 58b5886..c357b63 100644
      name: 广州市直接监管企业
 diff --git a/src/soe_radar/delivery.py b/src/soe_radar/delivery.py
 new file mode 100644
-index 0000000..9891e13
+index 0000000..9f90953
 --- /dev/null
 +++ b/src/soe_radar/delivery.py
-@@ -0,0 +1,672 @@
+@@ -0,0 +1,716 @@
 +"""Auditable delivery exports built from the local database and current config."""
 +
 +from __future__ import annotations
@@ -911,9 +1117,10 @@ index 0000000..9891e13
 +
 +def _copy_evidence(cfg, spec, snapshot, evidence_dir: Path, records: list[dict]):
 +    if not snapshot:
-+        return ""
++        return "", {}
 +    pages = snapshot.provenance.get("pages") or []
 +    first_path = ""
++    page_map = {}
 +    for page in pages:
 +        source = cfg.data_dir / page.get("path", "")
 +        if not source.is_file():
@@ -925,6 +1132,7 @@ index 0000000..9891e13
 +            shutil.copyfile(source, target)
 +        relative = str(target.relative_to(evidence_dir.parent))
 +        first_path = first_path or relative
++        page_map[digest] = relative
 +        records.append(
 +            {
 +                "文件": relative,
@@ -949,7 +1157,7 @@ index 0000000..9891e13
 +                "说明": "由原始 HTML 去除标签得到，仅用于复核，不替代原件。",
 +            }
 +        )
-+    return first_path
++    return first_path, page_map
 +
 +
 +def _manifest_rows(cfg, active, evidence_paths, evidence_hashes):
@@ -973,6 +1181,8 @@ index 0000000..9891e13
 +            gap = state.last_error if state and state.last_error else "未取得官方名录入口"
 +        elif state and state.last_error:
 +            gap = state.last_error
++        elif provenance.get("tls_verified") is False:
++            gap = "TLS 证书校验未完成；仅作待复核官方页面证据，不据此提升企业性质核验。"
 +        elif provenance.get("acquisition") == "official_index_excerpt":
 +            gap = "历史或索引摘录，需按当前官网分页和现行名单复核"
 +        rows.append(
@@ -1007,7 +1217,7 @@ index 0000000..9891e13
 +    return memberships
 +
 +
-+def _employer_rows(db, cfg, active, evidence_paths, evidence_hashes):
++def _employer_rows(db, cfg, active, evidence_paths, evidence_hashes, page_evidence):
 +    memberships = _memberships(cfg, active)
 +    with db.session() as s:
 +        employers = list(s.scalars(select(Employer).order_by(Employer.name)))
@@ -1055,6 +1265,11 @@ index 0000000..9891e13
 +            status = "当前"
 +        else:
 +            status = "待复核"
++        evidence_entry = page_evidence.get((spec.id, entry.get("page_sha256"))) if spec else None
++        evidence_path = (
++            evidence_entry[0] if evidence_entry else (evidence_paths.get(spec.id, "") if spec else "")
++        )
++        evidence_sha = entry.get("page_sha256") or (evidence_hashes.get(spec.id, "") if spec else "")
 +        rows.append(
 +            {
 +                "id": employer.id,
@@ -1065,11 +1280,11 @@ index 0000000..9891e13
 +                "主管口径": "/".join(sorted({item_spec.category for item_spec, _, _ in member})) or "",
 +                "层级": "所属单位" if employer.parent_id else ("集团/一级" if member else "待确认"),
 +                "母公司": parent_names.get(employer.parent_id, "") if employer.parent_id else "",
-+                "官方来源URL": snapshot.source_url
-+                if snapshot
-+                else (
++                "官方来源URL": (
 +                    source.homepage_url or source.url
 +                    if source
++                    else snapshot.source_url
++                    if snapshot
 +                    else relation.evidence_url
 +                    if relation
 +                    else employer.proof_url
@@ -1078,11 +1293,13 @@ index 0000000..9891e13
 +                "实际访问时间": (snapshot.provenance.get("pages") or [{}])[0].get("fetched_at", "")
 +                if snapshot
 +                else "",
++                "来源名称": entry.get("source_name", employer.name) if entry else "",
++                "证据页URL": entry.get("page_url", "") if entry else "",
 +                "来源原文片段": entry.get("quote", employer.name)
 +                if entry
 +                else ("来源配置声明的招聘主体" if source else relation.quote if relation else ""),
-+                "证据路径": evidence_paths.get(spec.id, "") if spec else "",
-+                "证据SHA256": evidence_hashes.get(spec.id, "") if spec else "",
++                "证据路径": evidence_path,
++                "证据SHA256": evidence_sha,
 +                "企业官网": entry.get("official_url", "")
 +                if entry
 +                else (source.homepage_url if source else ""),
@@ -1097,7 +1314,13 @@ index 0000000..9891e13
 +
 +def _relationship_rows(db):
 +    with db.session() as s:
-+        rows = list(s.scalars(select(Relationship).order_by(Relationship.created_at)))
++        rows = list(
++            s.scalars(
++                select(Relationship)
++                .where(Relationship.status == "confirmed")
++                .order_by(Relationship.created_at)
++            )
++        )
 +        parents = {row.id: row.name for row in s.scalars(select(Employer))}
 +    return [
 +        {
@@ -1194,7 +1417,10 @@ index 0000000..9891e13
 +    with db.session() as s:
 +        states = {row.id: row for row in s.scalars(select(SourceState))}
 +        parent_links = [row for row in s.scalars(select(Employer)) if row.parent_id and row.proof_url]
-+        relationships = {(row.parent_id, row.child_id) for row in s.scalars(select(Relationship))}
++        relationship_rows = list(s.scalars(select(Relationship)))
++        relationships = {(row.parent_id, row.child_id) for row in relationship_rows}
++        needs_review = [row for row in relationship_rows if row.status != "confirmed"]
++        parents = {row.id: row.name for row in s.scalars(select(Employer))}
 +    for spec in cfg.registries:
 +        state, snapshot = active[spec.id]
 +        if not spec.url:
@@ -1300,14 +1526,24 @@ index 0000000..9891e13
 +                )
 +            )
 +    for row in employer_rows:
-+        if row["主管口径"] and not any(
-+            source.employer == row["原始名称"] or source.name == row["原始名称"] for source in cfg.sources
-+        ):
++        names = {row["原始名称"], row["规范名称"], *row.get("别名", [])}
++        matching = [source for source in cfg.sources if source.employer in names or source.name in names]
++        available = [source for source in matching if source.enabled]
++        in_scope = bool(
++            row["主管口径"]
++            or row["母公司"]
++            or row["层级"] in ("集团/一级", "所属单位")
++            or row["状态"].startswith("当前（关系")
++        )
++        if in_scope and not available:
++            issue = "已建档但未配置可用官方招聘入口。"
++            if matching:
++                issue = "仅有已禁用来源，当前没有可用监测入口。"
 +            rows.append(
 +                _gap(
 +                    "入口未找到",
 +                    row["原始名称"],
-+                    "已建档但未配置官方招聘入口。",
++                    issue,
 +                    row["实际访问时间"],
 +                    "从企业官网、集团招聘平台和官方公告列表寻找入口并做列表/详情验证。",
 +                    "中",
@@ -1325,6 +1561,17 @@ index 0000000..9891e13
 +                    "中",
 +                )
 +            )
++    for relationship in needs_review:
++        rows.append(
++            _gap(
++                "关系待复核",
++                parents.get(relationship.child_id, relationship.child_id),
++                "关系证据不足以确认所选法人主体，未计入已确认关系。",
++                relationship.evidence_date,
++                "补充该法人全称对应的独立官方披露及简称映射。",
++                "中",
++            )
++        )
 +    for source_id, count in source_campus.items():
 +        pending_count = 0
 +        with db.session() as s:
@@ -1373,10 +1620,13 @@ index 0000000..9891e13
 +    active = _state_snapshot(db, cfg)
 +    evidence_records = []
 +    evidence_paths, evidence_hashes = {}, {}
++    page_evidence = {}
 +    for spec in cfg.registries:
 +        _, snapshot = active[spec.id]
-+        path = _copy_evidence(cfg, spec, snapshot, evidence_dir, evidence_records)
++        path, page_map = _copy_evidence(cfg, spec, snapshot, evidence_dir, evidence_records)
 +        evidence_paths[spec.id] = path
++        for digest, relative in page_map.items():
++            page_evidence[(spec.id, digest)] = (relative, digest)
 +        if snapshot:
 +            pages = snapshot.provenance.get("pages") or []
 +            evidence_hashes[spec.id] = pages[0].get("sha256", "") if pages else snapshot.digest
@@ -1426,7 +1676,7 @@ index 0000000..9891e13
 +            }
 +        )
 +    manifest = _manifest_rows(cfg, active, evidence_paths, evidence_hashes)
-+    employers = _employer_rows(db, cfg, active, evidence_paths, evidence_hashes)
++    employers = _employer_rows(db, cfg, active, evidence_paths, evidence_hashes, page_evidence)
 +    relationships = _relationship_rows(db)
 +    sources = _source_rows(db, cfg)
 +    gaps = _gap_rows(db, cfg, active, employers)
@@ -1528,10 +1778,18 @@ index b0d18cb..a87fd41 100644
      ):
          result.recruitment_type = "notice"
 diff --git a/src/soe_radar/fetching.py b/src/soe_radar/fetching.py
-index cc7b92f..c5716ea 100644
+index cc7b92f..0879077 100644
 --- a/src/soe_radar/fetching.py
 +++ b/src/soe_radar/fetching.py
-@@ -119,18 +119,54 @@ def extract_page(url: str, html: str) -> Page:
+@@ -104,6 +104,7 @@ def extract_page(url: str, html: str) -> Page:
+         ".article-content",
+         ".article_content",
+         ".content_detail",
++        ".zwxl-content",
+         "#zoom",
+         "#UCAP-CONTENT",
+         "article",
+@@ -119,18 +120,55 @@ def extract_page(url: str, html: str) -> Page:
      text = body.get_text("\n", strip=True)
      text = re.sub(r"[ \t\xa0]+", " ", text)
      text = re.sub(r"\n{3,}", "\n\n", text).strip()
@@ -1541,17 +1799,20 @@ index cc7b92f..c5716ea 100644
 -        if re.search(r"\.(pdf|png|jpg|jpeg)(?:[?#]|$)", target, re.I)
 -    ]
 +
-+    def chrome(target, label):
++    def chrome(target, label, *, width=0, height=0):
++        """Only drop an image when there is positive evidence it is site chrome.
++
++        A large, unlabelled image inside the article can be a recruitment poster.
++        Directory names such as /images/ and words such as banner/share are not
++        enough on their own; dropping those would silently lose real attachments.
++        """
 +        text = (target + " " + label).lower()
 +        if re.search(
-+            r"(?:logo|icon|qrcode|qr-code|二维码|分享|share|banner|spacer|pixel|button|nav-|/images/col-)",
++            r"(?:logo|icon|qrcode|qr-code|二维码|扫码|分享|spacer|pixel|button|nav-|/images/col-|/images/menu|weixin|weibo)",
 +            text,
 +        ):
 +            return True
-+        # Government CMS chrome often lives under /images/ with generic alt text.
-+        return "/images/" in target.lower() and not re.search(
-+            r"(?:招聘|岗位|公告|简章|海报|条件|职位|job|recruit|campus|poster)", text
-+        )
++        return bool((width and width < 100) or (height and height < 100))
 +
 +    ignored_chrome = 0
 +    attachments = []
@@ -1571,11 +1832,9 @@ index cc7b92f..c5716ea 100644
 +            height = int(re.sub(r"\D", "", img.get("height", "") or "0") or 0)
 +        except ValueError:
 +            width = height = 0
-+        if (width and width < 100) or (height and height < 100):
-+            continue
          target = urljoin(url, image_url)
 +        label = img.get("alt") or "正文图片（待人工读取）"
-+        if chrome(target, label):
++        if chrome(target, label, width=width, height=height):
 +            ignored_chrome += 1
 +            continue
          if target.startswith(("http://", "https://")) and target not in {a["url"] for a in attachments}:
@@ -1592,7 +1851,7 @@ index cc7b92f..c5716ea 100644
      return Page(
          url=url,
          title=title,
-@@ -496,7 +532,16 @@ class Fetcher:
+@@ -496,7 +534,16 @@ class Fetcher:
              raise FetchFailure("JSON 来源尚未配置 api_items_path 和 api_fields")
          rows = data
          for part in source.api_items_path.split("."):
@@ -1610,7 +1869,7 @@ index cc7b92f..c5716ea 100644
          if not isinstance(rows, list):
              raise FetchFailure("公开接口字段结构发生变化")
          title_key, url_key = source.api_fields.get("title", "title"), source.api_fields.get("url", "url")
-@@ -591,8 +636,9 @@ class Fetcher:
+@@ -591,8 +638,9 @@ class Fetcher:
                      item["status"] = "failed"
                      item["error"] = type(exc).__name__
              else:
@@ -1622,6 +1881,123 @@ index cc7b92f..c5716ea 100644
                      try:
                          response = await self.get(
                              attachment["url"],
+diff --git a/src/soe_radar/identity.py b/src/soe_radar/identity.py
+new file mode 100644
+index 0000000..8e8cfde
+--- /dev/null
++++ b/src/soe_radar/identity.py
+@@ -0,0 +1,111 @@
++"""Merge display-name variants into one employer identity without losing history."""
++
++from __future__ import annotations
++
++from collections import defaultdict
++
++from sqlalchemy import select
++
++from .coverage import split_alias
++from .models import Activity, Employer, Opportunity, Relationship
++
++
++def identity_key(name: str) -> str:
++    canonical, _ = split_alias(name)
++    return canonical.replace("（", "(").replace("）", ")").replace(" ", "")
++
++
++def _target_score(employer):
++    canonical, _ = split_alias(employer.name)
++    return (
++        1 if canonical == employer.name else 0,
++        employer.verified_at or "",
++        len(employer.aliases or []),
++        -len(employer.name),
++    )
++
++
++def merge_alias_employers(db, *, apply=False):
++    groups = defaultdict(list)
++    with db.session() as s:
++        for employer in s.scalars(select(Employer)):
++            groups[identity_key(employer.name)].append(employer)
++        plans = []
++        for key, rows in groups.items():
++            if len(rows) < 2:
++                continue
++            target = max(rows, key=_target_score)
++            duplicates = [row for row in rows if row.id != target.id]
++            plans.append(
++                {
++                    "key": key,
++                    "target": target.name,
++                    "duplicates": [row.name for row in duplicates],
++                    "target_id": target.id,
++                    "duplicate_ids": [row.id for row in duplicates],
++                }
++            )
++        if not apply:
++            return plans
++        for plan in plans:
++            target = s.get(Employer, plan["target_id"])
++            for duplicate_id in plan["duplicate_ids"]:
++                duplicate = s.get(Employer, duplicate_id)
++                if not duplicate:
++                    continue
++                for opportunity in s.scalars(
++                    select(Opportunity).where(Opportunity.employer_id == duplicate.id)
++                ):
++                    opportunity.employer_id = target.id
++                for activity in s.scalars(select(Activity).where(Activity.employer_id == duplicate.id)):
++                    activity.employer_id = target.id
++                for child in s.scalars(select(Employer).where(Employer.parent_id == duplicate.id)):
++                    child.parent_id = target.id
++                for relationship in list(
++                    s.scalars(
++                        select(Relationship).where(
++                            (Relationship.parent_id == duplicate.id) | (Relationship.child_id == duplicate.id)
++                        )
++                    )
++                ):
++                    parent_id = (
++                        target.id if relationship.parent_id == duplicate.id else relationship.parent_id
++                    )
++                    child_id = target.id if relationship.child_id == duplicate.id else relationship.child_id
++                    if parent_id == child_id:
++                        s.delete(relationship)
++                        continue
++                    existing = s.scalar(
++                        select(Relationship).where(
++                            Relationship.parent_id == parent_id,
++                            Relationship.child_id == child_id,
++                            Relationship.id != relationship.id,
++                        )
++                    )
++                    if existing:
++                        s.delete(relationship)
++                    else:
++                        relationship.parent_id = parent_id
++                        relationship.child_id = child_id
++                target.aliases = list(
++                    dict.fromkeys(
++                        [
++                            *(target.aliases or []),
++                            duplicate.name,
++                            *(duplicate.aliases or []),
++                        ]
++                    )
++                )
++                target.aliases = [value for value in target.aliases if value != target.name]
++                if target.org_type != "soe" and duplicate.org_type == "soe":
++                    target.org_type = duplicate.org_type
++                    target.proof_url = target.proof_url or duplicate.proof_url
++                    target.verified_at = target.verified_at or duplicate.verified_at
++                if not target.proof_url:
++                    target.proof_url = duplicate.proof_url
++                if not target.verified_at:
++                    target.verified_at = duplicate.verified_at
++                if target.industry == "综合" and duplicate.industry != "综合":
++                    target.industry = duplicate.industry
++                s.delete(duplicate)
++        return plans
 diff --git a/src/soe_radar/migrations/versions/0007_relationships.py b/src/soe_radar/migrations/versions/0007_relationships.py
 new file mode 100644
 index 0000000..1464420
@@ -1673,10 +2049,10 @@ index 86ffd58..ad92d4f 100644
      id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
 diff --git a/src/soe_radar/relationships.py b/src/soe_radar/relationships.py
 new file mode 100644
-index 0000000..560749d
+index 0000000..6bfaa55
 --- /dev/null
 +++ b/src/soe_radar/relationships.py
-@@ -0,0 +1,66 @@
+@@ -0,0 +1,68 @@
 +"""Evidence-gated parent/subsidiary relationships."""
 +
 +from __future__ import annotations
@@ -1734,6 +2110,8 @@ index 0000000..560749d
 +        record.status = status
 +        if status == "confirmed":
 +            child.parent_id = parent.id
++        elif child.parent_id == parent.id:
++            child.parent_id = None
 +        s.flush()
 +        return {
 +            "id": record.id,
@@ -1757,10 +2135,10 @@ index 27b72cc..c622044 100644
          )
          with self.db.session() as s:
 diff --git a/tests/test_coverage.py b/tests/test_coverage.py
-index 6b86c9b..8d1df4e 100644
+index 6b86c9b..394802e 100644
 --- a/tests/test_coverage.py
 +++ b/tests/test_coverage.py
-@@ -111,3 +111,93 @@ def test_orphan_parser_guesses_are_not_counted_as_companies(tmp_path):
+@@ -111,3 +111,294 @@ def test_orphan_parser_guesses_are_not_counted_as_companies(tmp_path):
      with db.session() as s:
          s.add(Employer(name="示例集团总行社会公开招聘"))
      assert "示例集团总行社会公开招聘" not in [r["name"] for r in coverage_report(db, cfg)["items"]]
@@ -1831,10 +2209,9 @@ index 6b86c9b..8d1df4e 100644
 +        '<div class="mainContent">监管企业名录 示例一集团有限公司 '
 +        "示例二集团有限责任公司（示例二有限公司）</div>"
 +    )
-+    assert [row["name"] for row in parse_registry(html, spec)] == [
-+        "示例一集团有限公司",
-+        "示例二集团有限责任公司（示例二有限公司）",
-+    ]
++    rows = {row["name"]: row for row in parse_registry(html, spec)}
++    assert set(rows) == {"示例一集团有限公司", "示例二集团有限责任公司"}
++    assert "示例二有限公司" in rows["示例二集团有限责任公司"]["aliases"]
 +
 +    links = RegistryConfig(
 +        id="links",
@@ -1854,12 +2231,214 @@ index 6b86c9b..8d1df4e 100644
 +    assert rows["示例一集团有限公司"]["official_url"] == "https://one.example/"
 +    assert rows["示例二有限责任公司"]["official_url"] == ""
 +    assert rows["示例二有限责任公司"]["profile_url"].endswith("/profile")
++
++
++def test_partial_page_failure_never_replaces_known_membership(tmp_path):
++    import asyncio
++
++    import httpx
++
++    from soe_radar.coverage import coverage_report, refresh_registries, save_registry
++    from soe_radar.fetching import FetchFailure
++    from soe_radar.models import RegistryState
++
++    cfg = Settings.model_validate(
++        {
++            "data_dir": str(tmp_path / "data"),
++            "registries": [
++                {
++                    "id": "multi",
++                    "name": "分页名录",
++                    "category": "local",
++                    "url": "https://example.gov.cn/list",
++                    "page_urls": ["https://example.gov.cn/list_1"],
++                    "domains": ["example.gov.cn"],
++                    "min_entries": 1,
++                }
++            ],
++        }
++    )
++    db = initialize(cfg)
++    spec = cfg.registries[0]
++    first = "<table><tr><td>1</td><td>示例一有限公司</td></tr></table>"
++    second = "<table><tr><td>2</td><td>示例二有限公司</td></tr></table>"
++    saved = save_registry(
++        db,
++        cfg,
++        spec,
++        first + second,
++        pages=[
++            {"url": spec.url, "raw": first.encode()},
++            {"url": spec.page_urls[0], "raw": second.encode()},
++        ],
++    )
++
++    class MockFetcher:
++        network_attempts = []
++
++        async def get(self, url, *args, **kwargs):
++            if url.endswith("_1"):
++                raise FetchFailure("HTTP 503")
++            return httpx.Response(200, text=first, request=httpx.Request("GET", url))
++
++    asyncio.run(refresh_registries(db, cfg, fetcher=MockFetcher()))
++    report = coverage_report(db, cfg)
++    assert report["summary"]["registry_entities"] == 2
++    with db.session() as s:
++        state = s.get(RegistryState, spec.id)
++        assert state.active_snapshot_id == saved["id"]
++        assert state.status == "partial"
++
++
++def test_bracket_alias_reuses_existing_employer_and_preserves_source_name(tmp_path):
++    from sqlalchemy import select
++
++    from soe_radar.coverage import save_registry
++    from soe_radar.models import Employer
++
++    cfg = Settings.model_validate(
++        {
++            "data_dir": str(tmp_path / "data"),
++            "registries": [
++                {
++                    "id": "alias",
++                    "name": "别名名录",
++                    "category": "central",
++                    "url": "https://example.gov.cn/list",
++                    "domains": ["example.gov.cn"],
++                    "min_entries": 1,
++                }
++            ],
++        }
++    )
++    db = initialize(cfg)
++    with db.session() as s:
++        s.add(Employer(name="中国旅游集团有限公司", aliases=["香港中旅（集团）有限公司"]))
++    save_registry(
++        db,
++        cfg,
++        cfg.registries[0],
++        "<table><tr><td>1</td><td>中国旅游集团有限公司[香港中旅（集团）有限公司]</td></tr></table>",
++    )
++    with db.session() as s:
++        rows = list(s.scalars(select(Employer).where(Employer.name.like("中国旅游集团有限公司%"))))
++    assert len(rows) == 1
++    assert "中国旅游集团有限公司[香港中旅（集团）有限公司]" in rows[0].aliases
++
++
++def test_text_adapter_merges_links_and_plain_text_entries(tmp_path):
++    from soe_radar.config import RegistryConfig
++    from soe_radar.coverage import parse_registry
++
++    spec = RegistryConfig(
++        id="mixed",
++        name="混合名录",
++        category="local",
++        url="https://example.gov.cn/list",
++        domains=["example.gov.cn"],
++        adapter="text",
++        entry_selector="#list",
++        min_entries=1,
++    )
++    rows = parse_registry(
++        '<div id="list"><a href="https://one.example">示例一集团有限公司</a>'
++        "<p>示例二集团有限公司</p><p>示例三集团有限公司</p></div>",
++        spec,
++    )
++    assert [row["name"] for row in rows] == [
++        "示例一集团有限公司",
++        "示例三集团有限公司",
++        "示例二集团有限公司",
++    ]
++
++
++def test_single_page_and_csv_content_hash_is_the_file_hash(tmp_path):
++    import hashlib
++
++    from soe_radar.coverage import import_registry_csv, save_registry
++    from soe_radar.models import RegistrySnapshot
++
++    cfg = Settings.model_validate(
++        {
++            "data_dir": str(tmp_path / "data"),
++            "registries": [
++                {
++                    "id": "hash",
++                    "name": "哈希名录",
++                    "category": "local",
++                    "url": "https://example.gov.cn/list",
++                    "domains": ["example.gov.cn"],
++                    "min_entries": 1,
++                }
++            ],
++        }
++    )
++    db = initialize(cfg)
++    spec = cfg.registries[0]
++    saved = save_registry(db, cfg, spec, "<table><tr><td>1</td><td>示例一有限公司</td></tr></table>")
++    with db.session() as s:
++        page = s.get(RegistrySnapshot, saved["id"]).provenance["pages"][0]
++        assert page["sha256"] == hashlib.sha256((cfg.data_dir / page["path"]).read_bytes()).hexdigest()
++    csv_saved = import_registry_csv(
++        db,
++        cfg,
++        spec,
++        "企业名称\n示例二有限公司\n".encode(),
++        "https://example.gov.cn/list",
++        confirmed=True,
++    )
++    with db.session() as s:
++        page = s.get(RegistrySnapshot, csv_saved["id"]).provenance["pages"][0]
++        assert page["sha256"] == hashlib.sha256((cfg.data_dir / page["path"]).read_bytes()).hexdigest()
++
++
++def test_merge_alias_employers_preserves_opportunity_and_personal_state(tmp_path):
++    from sqlalchemy import select
++
++    from soe_radar.identity import merge_alias_employers
++    from soe_radar.models import Activity, Batch, Employer, Opportunity, PersonalState
++
++    cfg = Settings.model_validate({"data_dir": str(tmp_path / "data")})
++    db = initialize(cfg)
++    with db.session() as s:
++        target = Employer(name="中国旅游集团有限公司")
++        duplicate = Employer(name="中国旅游集团有限公司[香港中旅（集团）有限公司]")
++        s.add_all([target, duplicate])
++        s.flush()
++        activity = Activity(employer_id=duplicate.id, identity="test-activity", title="示例招聘")
++        s.add(activity)
++        s.flush()
++        batch = Batch(activity_id=activity.id, name="正式批")
++        s.add(batch)
++        s.flush()
++        opportunity = Opportunity(
++            activity_id=activity.id,
++            batch_id=batch.id,
++            employer_id=duplicate.id,
++            source_id="test",
++            official_url="https://example.org/job",
++            title="示例招聘",
++        )
++        s.add(opportunity)
++        s.flush()
++        s.add(PersonalState(opportunity_id=opportunity.id, saved=True, notes="保留"))
++        opportunity_id = opportunity.id
++        target_id = target.id
++    plans = merge_alias_employers(db, apply=True)
++    assert len(plans) == 1
++    with db.session() as s:
++        employers = list(s.scalars(select(Employer).where(Employer.name.like("中国旅游集团有限公司%"))))
++        assert len(employers) == 1
++        opportunity = s.get(Opportunity, opportunity_id)
++        assert opportunity.employer_id == target_id
++        state = s.get(PersonalState, opportunity_id)
++        assert state.saved is True and state.notes == "保留"
 diff --git a/tests/test_delivery.py b/tests/test_delivery.py
 new file mode 100644
-index 0000000..73252c9
+index 0000000..a61a0dd
 --- /dev/null
 +++ b/tests/test_delivery.py
-@@ -0,0 +1,111 @@
+@@ -0,0 +1,187 @@
 +import json
 +
 +import pytest
@@ -1971,6 +2550,82 @@ index 0000000..73252c9
 +            quote="错误方向",
 +            evidence_date="2026-01-02",
 +        )
++
++
++def test_export_binds_each_employer_to_its_own_page(tmp_path):
++    cfg = delivery_settings(tmp_path).model_copy(
++        update={
++            "registries": [
++                delivery_settings(tmp_path)
++                .registries[0]
++                .model_copy(
++                    update={
++                        "page_urls": ["https://example.gov.cn/list_1"],
++                        "min_entries": 1,
++                    }
++                )
++            ]
++        }
++    )
++    db = initialize(cfg)
++    spec = cfg.registries[0]
++    one = "<table><tr><td>1</td><td>示例一有限公司</td></tr></table>"
++    two = "<table><tr><td>2</td><td>示例二有限公司</td></tr></table>"
++    save_registry(
++        db,
++        cfg,
++        spec,
++        one + two,
++        pages=[
++            {"url": spec.url, "raw": one.encode()},
++            {"url": spec.page_urls[0], "raw": two.encode()},
++        ],
++    )
++    export_delivery(db, cfg, tmp_path / "delivery")
++    rows = {
++        row["原始名称"]: row
++        for row in map(json.loads, (tmp_path / "delivery" / "employers.jsonl").read_text().splitlines())
++    }
++    for name in ("示例一有限公司", "示例二有限公司"):
++        path = tmp_path / "delivery" / rows[name]["证据路径"]
++        assert name in path.read_text(encoding="utf-8")
++
++
++def test_needs_review_relationship_is_not_in_confirmed_file_and_confirmed_child_gets_entry_gap(tmp_path):
++    cfg = delivery_settings(tmp_path)
++    db = initialize(cfg)
++    save_registry(
++        db,
++        cfg,
++        cfg.registries[0],
++        "<table><tr><td>1</td><td>示例子公司有限公司</td></tr></table>",
++    )
++    add_relationship(
++        db,
++        "示例集团有限公司",
++        "示例子公司有限公司",
++        evidence_url="https://example.org/group",
++        quote="所属企业",
++        evidence_date="2026-01-02",
++        status="needs_review",
++    )
++    export_delivery(db, cfg, tmp_path / "delivery")
++    assert (tmp_path / "delivery" / "relationships.jsonl").read_text().strip() == ""
++    gaps = (tmp_path / "delivery" / "gaps.csv").read_text(encoding="utf-8-sig")
++    assert "关系待复核" in gaps
++    add_relationship(
++        db,
++        "示例集团有限公司",
++        "示例子公司有限公司",
++        evidence_url="https://example.org/group",
++        quote="所属企业",
++        evidence_date="2026-01-02",
++        status="confirmed",
++    )
++    export_delivery(db, cfg, tmp_path / "delivery")
++    gaps = (tmp_path / "delivery" / "gaps.csv").read_text(encoding="utf-8-sig")
++    assert "入口未找到" in gaps
++    assert "示例子公司有限公司" in gaps
 diff --git a/tests/test_extraction.py b/tests/test_extraction.py
 index 4da6485..089113b 100644
 --- a/tests/test_extraction.py
@@ -1994,7 +2649,7 @@ index 4da6485..089113b 100644
 +    )
 +    assert result.recruitment_type == "notice"
 diff --git a/tests/test_fetching.py b/tests/test_fetching.py
-index 5418272..15b2a9d 100644
+index 5418272..7d59dfa 100644
 --- a/tests/test_fetching.py
 +++ b/tests/test_fetching.py
 @@ -85,6 +85,24 @@ def test_body_images_are_not_silently_treated_as_parsed():
@@ -2022,3 +2677,35 @@ index 5418272..15b2a9d 100644
  def test_volatile_waf_parameters_do_not_create_different_announcements():
      from soe_radar.urls import canonical
  
+@@ -266,3 +284,31 @@ def test_spa_announcement_fragments_are_preserved_and_do_not_collapse_ids():
+     assert canonical(one) != canonical(two)
+     assert canonical(one) == canonical(one.replace("/#/notice-details", "/notice-details"))
+     assert canonical("https://example.org/notice#footer") == "https://example.org/notice"
++
++
++def test_unlabelled_large_body_poster_is_kept_as_attachment():
++    poster = "https://example.org/images/20261023/123456.jpg"
++    page = extract_page(
++        "https://example.org/recruit",
++        "<article><h1>示例公司2027校园招聘</h1><p>详见下方海报</p>"
++        f'<img src="{poster}" width="1000" height="2000"></article>',
++    )
++    assert any(item["url"] == poster for item in page.attachments)
++
++
++def test_recruitment_banner_is_kept_but_qr_and_logo_are_ignored():
++    banner = extract_page(
++        "https://example.org/recruit",
++        '<article><img src="/images/banner-recruit.jpg" width="1200" height="400" alt="招聘横幅"></article>',
++    )
++    assert any(item["url"].endswith("banner-recruit.jpg") for item in banner.attachments)
++    qr = extract_page(
++        "https://example.org/recruit",
++        '<article><img src="/images/qrcode.png" alt="扫码关注"></article>',
++    )
++    assert not any(item["url"] for item in qr.attachments)
++    logo = extract_page(
++        "https://example.org/recruit",
++        '<article><img src="/images/logo.png" alt="网站标志"></article>',
++    )
++    assert not any(item["url"] for item in logo.attachments)
