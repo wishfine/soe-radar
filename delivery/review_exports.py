@@ -22,14 +22,16 @@ def main():
     names = {row["id"]: row["name"] for row in connection.execute("select id,name from employers")}
     relationships = list(
         connection.execute(
-            "select parent_id,child_id,relation_type,evidence_url,quote,evidence_date,status "
+            "select parent_id,child_id,relation_type,evidence_url,quote,evidence_date,status,provenance "
             "from relationships order by created_at"
         )
     )
     connection.close()
     with (ROOT / "relationship_review.csv").open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow(["母公司", "子公司", "关系类型", "状态", "证据URL", "证据日期", "原文片段"])
+        writer.writerow(
+            ["母公司", "子公司", "关系类型", "状态", "证据URL", "证据日期", "原文片段", "证据记录"]
+        )
         for row in relationships:
             writer.writerow(
                 [
@@ -40,6 +42,7 @@ def main():
                     row["evidence_url"],
                     row["evidence_date"],
                     row["quote"],
+                    row["provenance"],
                 ]
             )
 
@@ -52,7 +55,9 @@ def main():
         file = ROOT / path
         if not file.is_file() or file.suffix.lower() != ".html":
             continue
-        text = norm(BeautifulSoup(file.read_text(encoding="utf-8", errors="replace"), "html.parser").get_text())
+        text = norm(
+            BeautifulSoup(file.read_text(encoding="utf-8", errors="replace"), "html.parser").get_text()
+        )
         checks.append(
             {
                 "企业": row["原始名称"],

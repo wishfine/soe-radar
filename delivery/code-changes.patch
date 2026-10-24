@@ -18,7 +18,7 @@ index 328dc7b..be4e4c4 100644
  
  `coverage` 的默认届别为运行时下一届，也可明确指定；名单、招聘季和原文年份不会被自动改写。配置 `registries` 按 `id` 合并，空列表关闭名录刷新。名录读取成功每七天复查、失败每日重试，失败保留已有名单和历史。网页“全国覆盖”列出未知分母和未接入地区，并支持导入已核对的官方 CSV：
 diff --git a/src/soe_radar/cli.py b/src/soe_radar/cli.py
-index 3e3e9ab..3cbd803 100644
+index 3e3e9ab..6c1f124 100644
 --- a/src/soe_radar/cli.py
 +++ b/src/soe_radar/cli.py
 @@ -190,6 +190,68 @@ def doctor(
@@ -90,10 +90,25 @@ index 3e3e9ab..3cbd803 100644
  @app.command("coverage")
  def coverage(cohort: int | None = None):
      """列出已知企业、未接入名录、网络受阻与当届活动覆盖。全国分母未知时不造覆盖率。"""
-@@ -215,6 +277,61 @@ def registry_refresh(ids: str | None = typer.Option(None, help="逗号分隔名
+@@ -215,6 +277,76 @@ def registry_refresh(ids: str | None = typer.Option(None, help="逗号分隔名
      db.engine.dispose()
  
  
++@app.command("registry-repair-snapshots")
++def registry_repair_snapshots(
++    apply: bool = typer.Option(False, "--apply", help="实际重算并写入；默认只预览"),
++):
++    """修复历史名录快照的整页摘要和逐条页面绑定。"""
++    from .coverage import repair_registry_snapshots
++
++    cfg = load_settings()
++    db = initialize(cfg)
++    try:
++        output({"plans": repair_registry_snapshots(db, apply=apply), "applied": apply})
++    finally:
++        db.engine.dispose()
++
++
 +@app.command("registry-import-html")
 +def registry_import_html(
 +    registry: str = typer.Option(..., "--registry", help="名录 id"),
@@ -180,19 +195,25 @@ index 790dac1..93a5ced 100644
  
  
 diff --git a/src/soe_radar/coverage.py b/src/soe_radar/coverage.py
-index 19dba35..a5ce27f 100644
+index 19dba35..5104632 100644
 --- a/src/soe_radar/coverage.py
 +++ b/src/soe_radar/coverage.py
-@@ -5,7 +5,7 @@ from __future__ import annotations
+@@ -3,25 +3,133 @@
+ from __future__ import annotations
+ 
  import hashlib
++import json
  import re
  from datetime import UTC, datetime, timedelta
 -from urllib.parse import urljoin
++from pathlib import Path
 +from urllib.parse import urljoin, urlsplit
  
  from bs4 import BeautifulSoup
  from sqlalchemy import select
-@@ -14,14 +14,119 @@ from .models import Employer, Opportunity, RegistrySnapshot, RegistryState, Sour
+ 
++from .extraction import PARSER_VERSION
+ from .models import Employer, Opportunity, RegistrySnapshot, RegistryState, SourceState, stamp
  from .schemas import local_now
  from .urls import on_domains, public_url
  
@@ -314,7 +335,7 @@ index 19dba35..a5ce27f 100644
              values = (
                  [node.get_text(" ", strip=True)]
                  if spec.adapter == "links"
-@@ -29,52 +134,179 @@ def parse_registry(html, spec):
+@@ -29,52 +137,179 @@ def parse_registry(html, spec):
              )
              for value in values:
                  name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", value).strip()
@@ -530,12 +551,20 @@ index 19dba35..a5ce27f 100644
  
  
  def import_registry_csv(db, cfg, spec, content, proof_url, *, confirmed=False):
-@@ -131,13 +363,81 @@ def import_registry_csv(db, cfg, spec, content, proof_url, *, confirmed=False):
+@@ -131,51 +366,206 @@ def import_registry_csv(db, cfg, spec, content, proof_url, *, confirmed=False):
      )
  
  
 -def _save_entries(db, cfg, spec, entries, raw, source_url, extension, status, *, provenance=None):
 -    digest = hashlib.sha256(source_url.encode() + b"\0" + raw).hexdigest()
++def snapshot_digest(pages):
++    """Version identity over every page URL/content and the parser version."""
++    digest = hashlib.sha256(PARSER_VERSION.encode() + b"\0")
++    for page in pages:
++        digest.update(page["url"].encode() + b"\0" + page["raw"] + b"\0")
++    return digest.hexdigest()
++
++
 +def _save_entries(
 +    db,
 +    cfg,
@@ -559,7 +588,6 @@ index 19dba35..a5ce27f 100644
 -        path.write_bytes(raw)
 +    page_records = []
 +    if pages:
-+        digest_input = b""
 +        for page in pages:
 +            page_raw = page["raw"]
 +            page_digest = hashlib.sha256(page_raw).hexdigest()
@@ -574,10 +602,7 @@ index 19dba35..a5ce27f 100644
 +                    "fetched_at": stamp(),
 +                }
 +            )
-+            digest_input += page["url"].encode() + b"\0" + page_raw + b"\0"
-+        digest = hashlib.sha256(digest_input).hexdigest()
 +    else:
-+        digest = hashlib.sha256(source_url.encode() + b"\0" + raw).hexdigest()
 +        content_digest = hashlib.sha256(raw).hexdigest()
 +        path = folder / (content_digest + "." + extension)
 +        if not path.exists():
@@ -590,11 +615,12 @@ index 19dba35..a5ce27f 100644
 +                "fetched_at": stamp(),
 +            }
 +        ]
++    snapshot_id_digest = snapshot_digest(pages or [{"url": source_url, "raw": raw}])
 +    raw_path = page_records[0]["path"]
 +    path_by_sha = {record["sha256"]: record for record in page_records}
 +    for entry in entries:
-+        digest = entry.get("page_sha256") or page_records[0]["sha256"]
-+        record = path_by_sha.get(digest, page_records[0])
++        entry_digest = entry.get("page_sha256") or page_records[0]["sha256"]
++        record = path_by_sha.get(entry_digest, page_records[0])
 +        entry.setdefault("page_url", record["url"])
 +        entry.setdefault("page_sha256", record["sha256"])
 +        entry["page_path"] = record["path"]
@@ -614,10 +640,27 @@ index 19dba35..a5ce27f 100644
 +        details["published_at"] = publication
 +    if error:
 +        details["fetch_error"] = error[:300]
++    entries_fingerprint = hashlib.sha256(
++        json.dumps(entries, ensure_ascii=False, sort_keys=True).encode()
++    ).hexdigest()
      with db.session() as s:
++        digest = snapshot_id_digest
          snapshot = s.scalar(
              select(RegistrySnapshot).where(
-@@ -150,32 +450,102 @@ def _save_entries(db, cfg, spec, entries, raw, source_url, extension, status, *,
+                 RegistrySnapshot.registry_id == spec.id, RegistrySnapshot.digest == digest
+             )
+         )
++        if snapshot and snapshot.entries != entries:
++            # Same source bytes with a different parse result must not reuse stale entries.
++            digest = hashlib.sha256((snapshot_id_digest + entries_fingerprint).encode()).hexdigest()
++            snapshot = s.scalar(
++                select(RegistrySnapshot).where(
++                    RegistrySnapshot.registry_id == spec.id, RegistrySnapshot.digest == digest
++                )
++            )
+         if not snapshot:
+             snapshot = RegistrySnapshot(
+                 registry_id=spec.id,
                  digest=digest,
                  source_url=source_url,
                  entries=entries,
@@ -634,7 +677,7 @@ index 19dba35..a5ce27f 100644
              s.add(snapshot)
              s.flush()
 +        else:
-+            # Same content can gain better provenance without creating a duplicate version.
++            # Same identity and same parsed entries can gain better provenance.
 +            snapshot.provenance = details
          state = s.get(RegistryState, spec.id)
          if not state:
@@ -655,16 +698,16 @@ index 19dba35..a5ce27f 100644
 +            aliases = [value for value in entry.get("aliases", []) if value]
 +            source_name = entry.get("source_name", canonical)
 +            employer = by_name.get(canonical) or by_alias.get(canonical)
-+            if not employer:
-+                for alias in aliases:
-+                    employer = by_name.get(alias) or by_alias.get(alias)
-+                    if employer:
-+                        break
              if not employer:
 -                s.add(Employer(name=entry["name"], org_type="soe", proof_url=source_url, verified_at=stamp()))
 -            elif employer.org_type == "unknown":
 -                employer.org_type, employer.proof_url, employer.verified_at = "soe", source_url, stamp()
 -        state.active_snapshot_id = snapshot.id
++                for alias in aliases:
++                    employer = by_name.get(alias) or by_alias.get(alias)
++                    if employer:
++                        break
++            if not employer:
 +                employer = Employer(
 +                    name=canonical,
 +                    aliases=aliases,
@@ -736,7 +779,82 @@ index 19dba35..a5ce27f 100644
  
  
  def registry_failure(db, registry_id, reason):
-@@ -206,18 +576,50 @@ async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
+@@ -189,6 +579,74 @@ def registry_failure(db, registry_id, reason):
+         state.last_error = reason[:300]
+ 
+ 
++def repair_registry_snapshots(db, *, apply=False):
++    """Recompute version digests and per-entry page bindings for legacy snapshots."""
++    plans = []
++    with db.session() as s:
++        snapshots = list(s.scalars(select(RegistrySnapshot)))
++        for snapshot in snapshots:
++            pages = (snapshot.provenance or {}).get("pages") or []
++            if not pages or (snapshot.provenance or {}).get("digest_repaired_from"):
++                continue
++            raw_pages = []
++            for page in pages:
++                source = Path(db.path).parent / page.get("path", "")
++                if not source.is_file():
++                    raw_pages = []
++                    break
++                raw_pages.append({"url": page["url"], "raw": source.read_bytes()})
++            if not raw_pages:
++                plans.append(
++                    {
++                        "id": snapshot.id,
++                        "registry_id": snapshot.registry_id,
++                        "old_digest": snapshot.digest,
++                        "new_digest": None,
++                        "skipped": "原件缺失，无法重算",
++                    }
++                )
++                continue
++            correct = snapshot_digest(raw_pages)
++            if snapshot.digest != correct:
++                plans.append(
++                    {
++                        "id": snapshot.id,
++                        "registry_id": snapshot.registry_id,
++                        "old_digest": snapshot.digest,
++                        "new_digest": correct,
++                    }
++                )
++        if not apply:
++            return plans
++        for plan in plans:
++            if not plan.get("new_digest"):
++                continue
++            snapshot = s.get(RegistrySnapshot, plan["id"])
++            pages = (snapshot.provenance or {}).get("pages") or []
++            correct = plan["new_digest"]
++            existing = s.scalar(
++                select(RegistrySnapshot).where(
++                    RegistrySnapshot.registry_id == snapshot.registry_id,
++                    RegistrySnapshot.digest == correct,
++                    RegistrySnapshot.id != snapshot.id,
++                )
++            )
++            if existing:
++                correct = hashlib.sha256((correct + snapshot.id).encode()).hexdigest()
++            provenance = dict(snapshot.provenance or {})
++            provenance["digest_repaired_from"] = plan["old_digest"]
++            provenance["digest_repair_note"] = "旧版整页摘要被末页摘要覆盖；按全部页面内容与解析版本重算。"
++            path_by_sha = {page["sha256"]: page for page in pages}
++            for entry in snapshot.entries:
++                page = path_by_sha.get(entry.get("page_sha256"))
++                if page:
++                    entry["page_url"] = entry.get("page_url") or page["url"]
++                    entry["page_path"] = page["path"]
++            snapshot.digest = correct
++            snapshot.provenance = provenance
++        return plans
++
++
+ async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
+     from .fetching import Fetcher
+     from .models import uid
+@@ -206,18 +664,50 @@ async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
                  results.append({"registry_id": spec.id, "status": "missing_entry"})
                  continue
              db.acquire("registry", owner, seconds=600)
@@ -1035,10 +1153,10 @@ index 58b5886..c357b63 100644
      name: 广州市直接监管企业
 diff --git a/src/soe_radar/delivery.py b/src/soe_radar/delivery.py
 new file mode 100644
-index 0000000..9f90953
+index 0000000..699a420
 --- /dev/null
 +++ b/src/soe_radar/delivery.py
-@@ -0,0 +1,716 @@
+@@ -0,0 +1,717 @@
 +"""Auditable delivery exports built from the local database and current config."""
 +
 +from __future__ import annotations
@@ -1330,6 +1448,7 @@ index 0000000..9f90953
 +            "关系证据URL": row.evidence_url,
 +            "原文片段": row.quote,
 +            "证据日期": row.evidence_date,
++            "证据记录": row.provenance,
 +            "状态": row.status,
 +            "创建时间": row.created_at,
 +        }
@@ -1883,10 +2002,10 @@ index cc7b92f..0879077 100644
                              attachment["url"],
 diff --git a/src/soe_radar/identity.py b/src/soe_radar/identity.py
 new file mode 100644
-index 0000000..8e8cfde
+index 0000000..df31197
 --- /dev/null
 +++ b/src/soe_radar/identity.py
-@@ -0,0 +1,111 @@
+@@ -0,0 +1,189 @@
 +"""Merge display-name variants into one employer identity without losing history."""
 +
 +from __future__ import annotations
@@ -1912,6 +2031,65 @@ index 0000000..8e8cfde
 +        len(employer.aliases or []),
 +        -len(employer.name),
 +    )
++
++
++def _relationship_evidence(record):
++    values = list(record.provenance or [])
++    if not values and record.evidence_url:
++        values.append(
++            {
++                "url": record.evidence_url,
++                "quote": record.quote,
++                "date": record.evidence_date,
++                "status": record.status,
++            }
++        )
++    return values
++
++
++def _merge_relationship(session, relationship, parent_id, child_id):
++    if parent_id == child_id:
++        session.delete(relationship)
++        return
++    existing = session.scalar(
++        select(Relationship).where(
++            Relationship.parent_id == parent_id,
++            Relationship.child_id == child_id,
++            Relationship.id != relationship.id,
++        )
++    )
++    if not existing:
++        relationship.parent_id = parent_id
++        relationship.child_id = child_id
++        return
++    provenance = _relationship_evidence(existing)
++    for item in _relationship_evidence(relationship):
++        if item not in provenance:
++            provenance.append(item)
++    existing.provenance = provenance
++    if existing.status != "confirmed" and relationship.status == "confirmed":
++        existing.status = "confirmed"
++        existing.evidence_url = relationship.evidence_url
++        existing.quote = relationship.quote
++        existing.evidence_date = relationship.evidence_date
++    elif not existing.evidence_url:
++        existing.evidence_url = relationship.evidence_url
++        existing.quote = relationship.quote
++        existing.evidence_date = relationship.evidence_date
++    session.delete(relationship)
++
++
++def _safe_parent(session, target, candidate):
++    if not candidate or candidate == target.id:
++        return None
++    ancestor = session.get(Employer, candidate)
++    visited = {target.id}
++    while ancestor:
++        if ancestor.id in visited:
++            return None
++        visited.add(ancestor.id)
++        ancestor = session.get(Employer, ancestor.parent_id) if ancestor.parent_id else None
++    return candidate
 +
 +
 +def merge_alias_employers(db, *, apply=False):
@@ -1942,6 +2120,7 @@ index 0000000..8e8cfde
 +                duplicate = s.get(Employer, duplicate_id)
 +                if not duplicate:
 +                    continue
++                duplicate_parent_id = duplicate.parent_id
 +                for opportunity in s.scalars(
 +                    select(Opportunity).where(Opportunity.employer_id == duplicate.id)
 +                ):
@@ -1961,21 +2140,38 @@ index 0000000..8e8cfde
 +                        target.id if relationship.parent_id == duplicate.id else relationship.parent_id
 +                    )
 +                    child_id = target.id if relationship.child_id == duplicate.id else relationship.child_id
-+                    if parent_id == child_id:
-+                        s.delete(relationship)
-+                        continue
-+                    existing = s.scalar(
++                    _merge_relationship(s, relationship, parent_id, child_id)
++                # Relationship rows must be written before the duplicate employer is removed.
++                s.flush()
++
++                confirmed = list(
++                    s.scalars(
 +                        select(Relationship).where(
-+                            Relationship.parent_id == parent_id,
-+                            Relationship.child_id == child_id,
-+                            Relationship.id != relationship.id,
++                            Relationship.child_id == target.id,
++                            Relationship.status == "confirmed",
 +                        )
 +                    )
-+                    if existing:
-+                        s.delete(relationship)
-+                    else:
-+                        relationship.parent_id = parent_id
-+                        relationship.child_id = child_id
++                )
++                parent_ids = {row.parent_id for row in confirmed}
++                chosen = target.parent_id or duplicate_parent_id
++                if chosen is None and parent_ids:
++                    chosen = next(iter(parent_ids))
++                if chosen and chosen not in parent_ids and chosen != target.parent_id:
++                    # A needs_review-only parent link is not promoted to the employer pointer.
++                    chosen = None
++                chosen = _safe_parent(s, target, chosen)
++                target.parent_id = chosen
++                for relationship in confirmed:
++                    if relationship.parent_id != chosen:
++                        relationship.status = "needs_review"
++                        provenance = _relationship_evidence(relationship)
++                        provenance.append(
++                            {
++                                "note": "合并后发现多个已确认母公司，保留证据但降为待复核。",
++                                "date": relationship.evidence_date,
++                            }
++                        )
++                        relationship.provenance = provenance
 +                target.aliases = list(
 +                    dict.fromkeys(
 +                        [
@@ -1997,6 +2193,7 @@ index 0000000..8e8cfde
 +                if target.industry == "综合" and duplicate.industry != "综合":
 +                    target.industry = duplicate.industry
 +                s.delete(duplicate)
++                s.flush()
 +        return plans
 diff --git a/src/soe_radar/migrations/versions/0007_relationships.py b/src/soe_radar/migrations/versions/0007_relationships.py
 new file mode 100644
@@ -2022,11 +2219,31 @@ index 0000000..1464420
 +
 +def downgrade():
 +    raise RuntimeError("企业隶属关系证据不支持有损降级；请恢复备份。")
+diff --git a/src/soe_radar/migrations/versions/0008_relationship_provenance.py b/src/soe_radar/migrations/versions/0008_relationship_provenance.py
+new file mode 100644
+index 0000000..816e3ea
+--- /dev/null
++++ b/src/soe_radar/migrations/versions/0008_relationship_provenance.py
+@@ -0,0 +1,14 @@
++from alembic import op
++
++revision = "0008"
++down_revision = "0007"
++branch_labels = None
++depends_on = None
++
++
++def upgrade():
++    op.execute("ALTER TABLE relationships ADD COLUMN provenance JSON NOT NULL DEFAULT '[]'")
++
++
++def downgrade():
++    raise RuntimeError("关系证据审计不支持有损降级；请恢复备份。")
 diff --git a/src/soe_radar/models.py b/src/soe_radar/models.py
-index 86ffd58..ad92d4f 100644
+index 86ffd58..bc2eaf8 100644
 --- a/src/soe_radar/models.py
 +++ b/src/soe_radar/models.py
-@@ -31,6 +31,20 @@ class Employer(Base):
+@@ -31,6 +31,21 @@ class Employer(Base):
      industry: Mapped[str] = mapped_column(String, default="综合")
  
  
@@ -2040,6 +2257,7 @@ index 86ffd58..ad92d4f 100644
 +    quote: Mapped[str] = mapped_column(Text)
 +    evidence_date: Mapped[str] = mapped_column(String)
 +    status: Mapped[str] = mapped_column(String, default="confirmed")
++    provenance: Mapped[list] = mapped_column(JSON, default=list)
 +    created_at: Mapped[str] = mapped_column(String, default=stamp)
 +    __table_args__ = (UniqueConstraint("parent_id", "child_id"),)
 +
@@ -2049,10 +2267,10 @@ index 86ffd58..ad92d4f 100644
      id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
 diff --git a/src/soe_radar/relationships.py b/src/soe_radar/relationships.py
 new file mode 100644
-index 0000000..6bfaa55
+index 0000000..0159a56
 --- /dev/null
 +++ b/src/soe_radar/relationships.py
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,92 @@
 +"""Evidence-gated parent/subsidiary relationships."""
 +
 +from __future__ import annotations
@@ -2101,14 +2319,38 @@ index 0000000..6bfaa55
 +            select(Relationship).where(Relationship.parent_id == parent.id, Relationship.child_id == child.id)
 +        )
 +        if not record:
-+            record = Relationship(parent_id=parent.id, child_id=child.id)
++            record = Relationship(parent_id=parent.id, child_id=child.id, status=status)
 +            s.add(record)
++        evidence = {
++            "url": evidence_url,
++            "quote": quote.strip()[:5000],
++            "date": evidence_date,
++            "status": status,
++        }
++        provenance = list(record.provenance or [])
++        if not provenance and record.evidence_url:
++            provenance.append(
++                {
++                    "url": record.evidence_url,
++                    "quote": record.quote,
++                    "date": record.evidence_date,
++                    "status": record.status,
++                }
++            )
++        if evidence not in provenance:
++            provenance.append(evidence)
++        record.provenance = provenance
 +        record.relation_type = relation_type
-+        record.evidence_url = evidence_url
-+        record.quote = quote.strip()[:5000]
-+        record.evidence_date = evidence_date
-+        record.status = status
-+        if status == "confirmed":
++        if status == "confirmed" and record.status != "confirmed":
++            record.evidence_url = evidence_url
++            record.quote = quote.strip()[:5000]
++            record.evidence_date = evidence_date
++        elif not record.evidence_url:
++            record.evidence_url = evidence_url
++            record.quote = quote.strip()[:5000]
++            record.evidence_date = evidence_date
++        record.status = "confirmed" if status == "confirmed" or record.status == "confirmed" else status
++        if record.status == "confirmed":
 +            child.parent_id = parent.id
 +        elif child.parent_id == parent.id:
 +            child.parent_id = None
@@ -2135,10 +2377,10 @@ index 27b72cc..c622044 100644
          )
          with self.db.session() as s:
 diff --git a/tests/test_coverage.py b/tests/test_coverage.py
-index 6b86c9b..394802e 100644
+index 6b86c9b..c0ebec4 100644
 --- a/tests/test_coverage.py
 +++ b/tests/test_coverage.py
-@@ -111,3 +111,294 @@ def test_orphan_parser_guesses_are_not_counted_as_companies(tmp_path):
+@@ -111,3 +111,456 @@ def test_orphan_parser_guesses_are_not_counted_as_companies(tmp_path):
      with db.session() as s:
          s.add(Employer(name="示例集团总行社会公开招聘"))
      assert "示例集团总行社会公开招聘" not in [r["name"] for r in coverage_report(db, cfg)["items"]]
@@ -2433,6 +2675,168 @@ index 6b86c9b..394802e 100644
 +        assert opportunity.employer_id == target_id
 +        state = s.get(PersonalState, opportunity_id)
 +        assert state.saved is True and state.notes == "保留"
++
++
++def test_changed_nonfinal_page_creates_new_snapshot_with_all_entries(tmp_path):
++    from soe_radar.coverage import coverage_report, save_registry
++    from soe_radar.models import RegistrySnapshot
++
++    cfg = Settings.model_validate(
++        {
++            "data_dir": str(tmp_path / "data"),
++            "registries": [
++                {
++                    "id": "multi-change",
++                    "name": "多页变更",
++                    "category": "local",
++                    "url": "https://example.gov.cn/list",
++                    "domains": ["example.gov.cn"],
++                    "min_entries": 1,
++                }
++            ],
++        }
++    )
++    db = initialize(cfg)
++    spec = cfg.registries[0]
++    first = "<table><tr><td>1</td><td>前页企业有限公司</td></tr></table>"
++    changed = first + "<table><tr><td>3</td><td>前页新增有限公司</td></tr></table>"
++    second = "<table><tr><td>2</td><td>末页企业有限公司</td></tr></table>"
++
++    def save(page_one):
++        return save_registry(
++            db,
++            cfg,
++            spec,
++            page_one + second,
++            pages=[
++                {"url": spec.url, "raw": page_one.encode()},
++                {"url": spec.url + "?page=2", "raw": second.encode()},
++            ],
++        )
++
++    before = save(first)
++    after = save(changed)
++    assert before["id"] != after["id"]
++    assert after["count"] == 3
++    assert coverage_report(db, cfg)["summary"]["registry_entities"] == 3
++    with db.session() as s:
++        assert len(s.get(RegistrySnapshot, after["id"]).entries) == 3
++
++
++def test_merge_alias_employers_preserves_confirmed_parent_pointer(tmp_path):
++    from sqlalchemy import select
++
++    from soe_radar.identity import merge_alias_employers
++    from soe_radar.models import Employer, Relationship
++
++    cfg = Settings.model_validate({"data_dir": str(tmp_path / "data")})
++    db = initialize(cfg)
++    with db.session() as s:
++        parent = Employer(name="示例母公司有限公司")
++        target = Employer(name="示例子公司有限公司")
++        duplicate = Employer(name="示例子公司有限公司[旧名有限公司]")
++        s.add_all([parent, target, duplicate])
++        s.flush()
++        duplicate.parent_id = parent.id
++        s.add(
++            Relationship(
++                parent_id=parent.id,
++                child_id=duplicate.id,
++                relation_type="subsidiary",
++                evidence_url="https://example.org/confirmed",
++                quote="母公司持有子公司全部股权",
++                evidence_date="2026-01-01",
++                status="confirmed",
++            )
++        )
++        target_id, parent_id = target.id, parent.id
++    merge_alias_employers(db, apply=True)
++    with db.session() as s:
++        target = s.get(Employer, target_id)
++        assert target.parent_id == parent_id
++        edges = list(s.scalars(select(Relationship).where(Relationship.child_id == target_id)))
++        assert len(edges) == 1 and edges[0].status == "confirmed"
++
++
++def test_merge_same_parent_relationships_keeps_audit_without_fk_error(tmp_path):
++    from sqlalchemy import select
++
++    from soe_radar.identity import merge_alias_employers
++    from soe_radar.models import Employer, Relationship
++
++    cfg = Settings.model_validate({"data_dir": str(tmp_path / "data")})
++    db = initialize(cfg)
++    with db.session() as s:
++        parent = Employer(name="示例母公司有限公司")
++        target = Employer(name="示例子公司有限公司")
++        duplicate = Employer(name="示例子公司有限公司[旧名有限公司]")
++        s.add_all([parent, target, duplicate])
++        s.flush()
++        target.parent_id = parent.id
++        duplicate.parent_id = parent.id
++        for child, url, quote in [
++            (target, "https://example.org/a", "证据甲"),
++            (duplicate, "https://example.org/b", "证据乙"),
++        ]:
++            s.add(
++                Relationship(
++                    parent_id=parent.id,
++                    child_id=child.id,
++                    relation_type="subsidiary",
++                    evidence_url=url,
++                    quote=quote,
++                    evidence_date="2026-01-01",
++                    status="confirmed",
++                )
++            )
++        target_id, parent_id = target.id, parent.id
++    merge_alias_employers(db, apply=True)
++    with db.session() as s:
++        target = s.get(Employer, target_id)
++        assert target.parent_id == parent_id
++        edges = list(s.scalars(select(Relationship).where(Relationship.child_id == target_id)))
++        assert len(edges) == 1 and edges[0].status == "confirmed"
++        assert {item["quote"] for item in edges[0].provenance} == {"证据甲", "证据乙"}
++
++
++def test_merge_different_confirmed_parents_keeps_one_and_marks_other_review(tmp_path):
++    from sqlalchemy import select
++
++    from soe_radar.identity import merge_alias_employers
++    from soe_radar.models import Employer, Relationship
++
++    cfg = Settings.model_validate({"data_dir": str(tmp_path / "data")})
++    db = initialize(cfg)
++    with db.session() as s:
++        first_parent = Employer(name="示例母公司甲有限公司")
++        second_parent = Employer(name="示例母公司乙有限公司")
++        target = Employer(name="示例子公司有限公司")
++        duplicate = Employer(name="示例子公司有限公司[旧名有限公司]")
++        s.add_all([first_parent, second_parent, target, duplicate])
++        s.flush()
++        target.parent_id = first_parent.id
++        duplicate.parent_id = second_parent.id
++        for parent, child in [(first_parent, target), (second_parent, duplicate)]:
++            s.add(
++                Relationship(
++                    parent_id=parent.id,
++                    child_id=child.id,
++                    relation_type="subsidiary",
++                    evidence_url="https://example.org/" + parent.name,
++                    quote="证据",
++                    evidence_date="2026-01-01",
++                    status="confirmed",
++                )
++            )
++        target_id, first_id = target.id, first_parent.id
++    merge_alias_employers(db, apply=True)
++    with db.session() as s:
++        target = s.get(Employer, target_id)
++        assert target.parent_id == first_id
++        edges = list(s.scalars(select(Relationship).where(Relationship.child_id == target_id)))
++        statuses = {edge.parent_id: edge.status for edge in edges}
++        assert statuses[first_id] == "confirmed"
++        assert any(status == "needs_review" for status in statuses.values())
 diff --git a/tests/test_delivery.py b/tests/test_delivery.py
 new file mode 100644
 index 0000000..a61a0dd

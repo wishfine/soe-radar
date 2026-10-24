@@ -15,6 +15,23 @@
 | R7 | “南网数字”关系降为 `needs_review`，`relationships.jsonl` 只导出 confirmed；缺口台账增加“关系待复核”。 | confirmed 2 条，needs_review 1 条；见 `relationship_review.csv`。 |
 | R8 | “入口未找到”按企业范围和可用来源判断，不再要求必须有主管口径；别名/禁用来源单独判断。 | 3 家南网子公司均进入逐企入口缺口；`gaps.csv` 中“入口未找到”448 条。 |
 
+## 第二轮复审（S1–S3）
+
+- S1：修复 `_save_entries` 中循环变量覆盖整页 `digest` 的问题；整页摘要现在包含全部页面 URL/内容和 `PARSER_VERSION`，复用 snapshot 时校验 entries 指纹。新增 `registry-repair-snapshots --apply`，个人库历史快照已重算 digest 并修复逐条页绑定。非末页新增企业会创建新版本，active/stored/reported 均为 3。
+- S2：合并别名身份时迁移/校验 `parent_id` 与 confirmed Relationship；空值继承，相同上级保留，不同上级保留 target 并将另一条降为 `needs_review`；防止自环/循环。
+- S3：关系行先合并证据并 `flush`，再删除重复 Employer；新增迁移 0008 `relationships.provenance`，保留不同 URL/原文/日期/状态。两端同父关系合并不再触发 FK 错误，confirmed 状态保留。
+
+复现：
+
+```text
+uv run python delivery/review_round2_repro.py
+changed_nonfinal_page_creates_updated_snapshot: true
+merge_preserves_confirmed_parent_pointer: true
+merge_existing_relationship_edges: no IntegrityError
+```
+
+个人库迁移前备份：`backups/before-review-round2-20261024.tar.gz`。
+
 ## 报告口径更正
 
 - 本轮净新增校招机会改为 **28 条**（55→83），其中 2027 届 12 条；`activity_diff.json` 可复核 ID 差集。此前“33 条”是未排除山西结果公示前的旧口径。
@@ -42,7 +59,7 @@ uv run python delivery/review_exports.py
 ```text
 uv run pytest -q                 → 见 delivery/test-output.txt
 ruff check src tests             → All checks passed
-ruff format --check src tests    → 44 files already formatted
+ruff format --check src tests    → 45 files already formatted
 uv build                          → sdist + wheel 成功
 ```
 

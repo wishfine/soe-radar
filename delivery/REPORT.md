@@ -171,13 +171,15 @@
    - R6：snapshot 身份摘要与文件内容 SHA-256 分离。
    - R7：“南网数字”关系降为 needs_review；`relationships.jsonl` 只导出 confirmed。
    - R8：已确认子公司/所属单位即使不在名录中也进入逐企入口缺口。
+   - S1：snapshot digest 与 page digest 分离，纳入解析版本；新增历史快照修复命令。
+   - S2/S3：合并时迁移/校验 parent_id，冲突降为 needs_review；关系证据写入 provenance，先 flush 再删重复企业。
 
 测试与构建：
 
 ```text
-uv run pytest -q            → 147 passed, 1 warning
+uv run pytest -q            → 151 passed, 1 warning
 ruff check src tests        → All checks passed
-ruff format --check src tests → 44 files already formatted
+ruff format --check src tests → 45 files already formatted
 uv build                    → sdist + wheel 成功
 ```
 
@@ -209,6 +211,29 @@ mixed_link_plaintext_directory: true
 unlabelled_body_poster_retained: true
 delivered_file_hash_mismatches: 0
 employer_names_absent_from_bound_evidence: 0
+```
+
+## 7.2 第二轮复审修复（S1–S3）
+
+| 问题 | 修复 | 复现结果 |
+| --- | --- | --- |
+| S1 整页 digest 被末页覆盖 | 使用独立 `snapshot_digest`，纳入全部页面 URL/内容和 `PARSER_VERSION`；复用时校验 entries 指纹，不一致时创建新版本；新增 `registry-repair-snapshots` 修复历史快照元数据与逐条页绑定 | 非末页新增企业后创建新 snapshot，active/stored/reported 均为 3；旧快照 digest 已重算 |
+| S2 合并后母公司指针丢失 | 合并时继承/校验 target 与 duplicate 的 parent_id 和 confirmed Relationship；空值继承、相同上级保留、不同上级保留 target 并将另一条降为 needs_review；防止自环/循环 | 合并后 target.parent_id 与 confirmed Relationship 一致 |
+| S3 同父子关系合并外键错误 | 关系行先合并证据并 flush，再删除重复 Employer；新增 `relationships.provenance` JSON 审计列（迁移 0008），保留不同 URL/原文/日期/状态 | 两端同父关系合并无 IntegrityError，confirmed 保留，两条证据均在 provenance |
+
+第二轮复现：
+
+```text
+uv run python delivery/review_round2_repro.py
+changed_nonfinal_page_creates_updated_snapshot: true
+merge_preserves_confirmed_parent_pointer: true
+merge_existing_relationship_edges: no IntegrityError
+```
+
+个人库迁移前备份：`backups/before-review-round2-20261024.tar.gz`。历史快照修复命令：
+
+```bash
+uv run soe-radar registry-repair-snapshots --apply
 ```
 
 ## 8. 尚未解决的主要缺口

@@ -1,0 +1,3 @@
+{"probe": "changed_nonfinal_page_creates_updated_snapshot", "expected": {"new_version": true, "reported_count": 3, "active_count": 3, "stored_count": 3}, "actual": {"new_version": true, "reported_count": 3, "active_count": 3, "stored_count": 3}, "passes": true}
+{"probe": "merge_preserves_confirmed_parent_pointer", "expected": true, "actual": true, "passes": true}
+{"probe": "merge_existing_relationship_edges", "expected": "no IntegrityError", "actual": "no IntegrityError", "passes": true}
