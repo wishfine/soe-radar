@@ -173,11 +173,13 @@
    - R8：已确认子公司/所属单位即使不在名录中也进入逐企入口缺口。
    - S1：snapshot digest 与 page digest 分离，纳入解析版本；新增历史快照修复命令。
    - S2/S3：合并时迁移/校验 parent_id，冲突降为 needs_review；关系证据写入 provenance，先 flush 再删重复企业。
+   - T1：显式 `status` 决定当前审核状态，支持 confirmed → needs_review → confirmed 往返。
+   - T2：repair 重新赋值 entries 并独立检查页绑定，已修复数据可幂等复修。
 
 测试与构建：
 
 ```text
-uv run pytest -q            → 151 passed, 1 warning
+uv run pytest -q            → 153 passed, 1 warning
 ruff check src tests        → All checks passed
 ruff format --check src tests → 45 files already formatted
 uv build                    → sdist + wheel 成功
@@ -235,6 +237,23 @@ merge_existing_relationship_edges: no IntegrityError
 ```bash
 uv run soe-radar registry-repair-snapshots --apply
 ```
+
+## 7.3 第三轮复审修复（T1–T2）
+
+| 问题 | 修复 | 复现结果 |
+| --- | --- | --- |
+| T1 显式降级被 confirmed 优先策略阻止 | `add_relationship` 的显式 `status` 现在直接决定当前审核状态；旧证据保留在 `provenance`，降级时清除 `parent_id`；状态只接受 confirmed/needs_review | confirmed → needs_review → confirmed 往返通过，交付仍只导出 confirmed |
+| T2 历史条目 page_path 修复未持久化 | repair 构造新的 entries 列表并赋值，显式触发 JSON 列变更；页绑定检查独立于 digest 修复，已标记修过的快照仍检查绑定；无法唯一定位的条目写 `page_binding=needs_review`；修复幂等 | 重新打开 session 后 page_path 已持久化；第二次 repair 返回空计划 |
+
+第三轮复现：
+
+```text
+uv run python delivery/review_round3_repro.py
+explicit_relationship_downgrade: true
+repaired_page_binding_persists_after_commit: true
+```
+
+个人库已执行 `registry-repair-snapshots --apply`；active 快照摘要未受影响，历史条目的页绑定已持久化修复。
 
 ## 8. 尚未解决的主要缺口
 

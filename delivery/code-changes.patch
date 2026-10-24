@@ -195,7 +195,7 @@ index 790dac1..93a5ced 100644
  
  
 diff --git a/src/soe_radar/coverage.py b/src/soe_radar/coverage.py
-index 19dba35..5104632 100644
+index 19dba35..89b9a47 100644
 --- a/src/soe_radar/coverage.py
 +++ b/src/soe_radar/coverage.py
 @@ -3,25 +3,133 @@
@@ -342,11 +342,11 @@ index 19dba35..5104632 100644
 -                if not re.fullmatch(
 -                    r"[\u4e00-\u9fffA-Za-z0-9（）()·\[\]【】—－\-]{4,100}(?:公司|银行|总局)", name
 -                ):
--                    continue
--                if "集体" in name:
 +                name = name.lstrip("（(【[")
 +                if not _is_company(name):
                      continue
+-                if "集体" in name:
+-                    continue
 -                link = node if node.name == "a" else node.select_one("a[href]")
 -                target = ""
 -                if link:
@@ -698,16 +698,16 @@ index 19dba35..5104632 100644
 +            aliases = [value for value in entry.get("aliases", []) if value]
 +            source_name = entry.get("source_name", canonical)
 +            employer = by_name.get(canonical) or by_alias.get(canonical)
++            if not employer:
++                for alias in aliases:
++                    employer = by_name.get(alias) or by_alias.get(alias)
++                    if employer:
++                        break
              if not employer:
 -                s.add(Employer(name=entry["name"], org_type="soe", proof_url=source_url, verified_at=stamp()))
 -            elif employer.org_type == "unknown":
 -                employer.org_type, employer.proof_url, employer.verified_at = "soe", source_url, stamp()
 -        state.active_snapshot_id = snapshot.id
-+                for alias in aliases:
-+                    employer = by_name.get(alias) or by_alias.get(alias)
-+                    if employer:
-+                        break
-+            if not employer:
 +                employer = Employer(
 +                    name=canonical,
 +                    aliases=aliases,
@@ -779,82 +779,129 @@ index 19dba35..5104632 100644
  
  
  def registry_failure(db, registry_id, reason):
-@@ -189,6 +579,74 @@ def registry_failure(db, registry_id, reason):
+@@ -189,6 +579,121 @@ def registry_failure(db, registry_id, reason):
          state.last_error = reason[:300]
  
  
 +def repair_registry_snapshots(db, *, apply=False):
-+    """Recompute version digests and per-entry page bindings for legacy snapshots."""
++    """Recompute version digests and repair per-entry page bindings, idempotently."""
 +    plans = []
 +    with db.session() as s:
 +        snapshots = list(s.scalars(select(RegistrySnapshot)))
 +        for snapshot in snapshots:
 +            pages = (snapshot.provenance or {}).get("pages") or []
-+            if not pages or (snapshot.provenance or {}).get("digest_repaired_from"):
++            if not pages:
 +                continue
 +            raw_pages = []
++            page_text = {}
 +            for page in pages:
 +                source = Path(db.path).parent / page.get("path", "")
 +                if not source.is_file():
 +                    raw_pages = []
 +                    break
-+                raw_pages.append({"url": page["url"], "raw": source.read_bytes()})
++                raw = source.read_bytes()
++                raw_pages.append({"url": page["url"], "raw": raw})
++                page_text[page["sha256"]] = BeautifulSoup(
++                    raw.decode("utf-8", "replace"), "html.parser"
++                ).get_text(" ", strip=True)
 +            if not raw_pages:
-+                plans.append(
-+                    {
-+                        "id": snapshot.id,
-+                        "registry_id": snapshot.registry_id,
-+                        "old_digest": snapshot.digest,
-+                        "new_digest": None,
-+                        "skipped": "原件缺失，无法重算",
-+                    }
-+                )
 +                continue
 +            correct = snapshot_digest(raw_pages)
-+            if snapshot.digest != correct:
++            path_by_sha = {page["sha256"]: page for page in pages}
++            path_by_url = {page["url"]: page for page in pages}
++            repaired_entries = []
++            binding_changes = 0
++            unresolved = 0
++            for entry in snapshot.entries:
++                item = dict(entry)
++                page = path_by_sha.get(item.get("page_sha256")) or path_by_url.get(item.get("page_url"))
++                if not page:
++                    name = item.get("source_name") or item.get("name", "")
++                    matches = [
++                        candidate
++                        for candidate in pages
++                        if name
++                        and name.replace(" ", "") in page_text.get(candidate["sha256"], "").replace(" ", "")
++                    ]
++                    page = matches[0] if len(matches) == 1 else None
++                if page:
++                    if (
++                        item.get("page_path") != page["path"]
++                        or item.get("page_sha256") != page["sha256"]
++                        or item.get("page_url") != page["url"]
++                    ):
++                        binding_changes += 1
++                    item["page_path"] = page["path"]
++                    item["page_sha256"] = page["sha256"]
++                    item["page_url"] = page["url"]
++                    item.pop("page_binding", None)
++                else:
++                    item["page_binding"] = "needs_review"
++                    unresolved += 1
++                repaired_entries.append(item)
++            repaired = (snapshot.provenance or {}).get("digest_repaired_from")
++            digest_changed = snapshot.digest != correct and not repaired
++            if digest_changed or binding_changes or unresolved:
 +                plans.append(
 +                    {
 +                        "id": snapshot.id,
 +                        "registry_id": snapshot.registry_id,
 +                        "old_digest": snapshot.digest,
 +                        "new_digest": correct,
++                        "digest_changed": digest_changed,
++                        "binding_changes": binding_changes,
++                        "unresolved_entries": unresolved,
++                        "entries": repaired_entries,
++                        "pages": pages,
++                        "old_provenance": dict(snapshot.provenance or {}),
 +                    }
 +                )
 +        if not apply:
-+            return plans
++            return [
++                {
++                    key: value
++                    for key, value in plan.items()
++                    if key not in ("entries", "pages", "old_provenance")
++                }
++                for plan in plans
++            ]
 +        for plan in plans:
-+            if not plan.get("new_digest"):
-+                continue
 +            snapshot = s.get(RegistrySnapshot, plan["id"])
-+            pages = (snapshot.provenance or {}).get("pages") or []
 +            correct = plan["new_digest"]
-+            existing = s.scalar(
-+                select(RegistrySnapshot).where(
-+                    RegistrySnapshot.registry_id == snapshot.registry_id,
-+                    RegistrySnapshot.digest == correct,
-+                    RegistrySnapshot.id != snapshot.id,
++            if plan["digest_changed"]:
++                existing = s.scalar(
++                    select(RegistrySnapshot).where(
++                        RegistrySnapshot.registry_id == snapshot.registry_id,
++                        RegistrySnapshot.digest == correct,
++                        RegistrySnapshot.id != snapshot.id,
++                    )
 +                )
-+            )
-+            if existing:
-+                correct = hashlib.sha256((correct + snapshot.id).encode()).hexdigest()
-+            provenance = dict(snapshot.provenance or {})
-+            provenance["digest_repaired_from"] = plan["old_digest"]
-+            provenance["digest_repair_note"] = "旧版整页摘要被末页摘要覆盖；按全部页面内容与解析版本重算。"
-+            path_by_sha = {page["sha256"]: page for page in pages}
-+            for entry in snapshot.entries:
-+                page = path_by_sha.get(entry.get("page_sha256"))
-+                if page:
-+                    entry["page_url"] = entry.get("page_url") or page["url"]
-+                    entry["page_path"] = page["path"]
-+            snapshot.digest = correct
-+            snapshot.provenance = provenance
-+        return plans
++                if existing:
++                    correct = hashlib.sha256((correct + snapshot.id).encode()).hexdigest()
++                provenance = dict(snapshot.provenance or {})
++                provenance["digest_repaired_from"] = plan["old_digest"]
++                provenance["digest_repair_note"] = (
++                    "旧版整页摘要被末页摘要覆盖；按全部页面内容与解析版本重算。"
++                )
++                snapshot.digest = correct
++                snapshot.provenance = provenance
++            if plan["binding_changes"] or plan["unresolved_entries"]:
++                provenance = dict(snapshot.provenance or {})
++                provenance["page_binding_repaired"] = plan["binding_changes"]
++                if plan["unresolved_entries"]:
++                    provenance["page_binding_unresolved"] = plan["unresolved_entries"]
++                snapshot.entries = plan["entries"]
++                snapshot.provenance = provenance
++        return [
++            {key: value for key, value in plan.items() if key not in ("entries", "pages", "old_provenance")}
++            for plan in plans
++        ]
 +
 +
  async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
      from .fetching import Fetcher
      from .models import uid
-@@ -206,18 +664,50 @@ async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
+@@ -206,18 +711,50 @@ async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
                  results.append({"registry_id": spec.id, "status": "missing_entry"})
                  continue
              db.acquire("registry", owner, seconds=600)
@@ -2267,10 +2314,10 @@ index 86ffd58..bc2eaf8 100644
      id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
 diff --git a/src/soe_radar/relationships.py b/src/soe_radar/relationships.py
 new file mode 100644
-index 0000000..0159a56
+index 0000000..599fc3f
 --- /dev/null
 +++ b/src/soe_radar/relationships.py
-@@ -0,0 +1,92 @@
+@@ -0,0 +1,96 @@
 +"""Evidence-gated parent/subsidiary relationships."""
 +
 +from __future__ import annotations
@@ -2294,6 +2341,8 @@ index 0000000..0159a56
 +    evidence_date,
 +    status="confirmed",
 +):
++    if status not in ("confirmed", "needs_review"):
++        raise ValueError("关系状态只能是 confirmed 或 needs_review")
 +    if not evidence_url or not quote.strip() or not evidence_date:
 +        raise ValueError("母子公司关系必须同时提供证据URL、原文片段和日期")
 +    public_url(evidence_url)
@@ -2341,19 +2390,21 @@ index 0000000..0159a56
 +            provenance.append(evidence)
 +        record.provenance = provenance
 +        record.relation_type = relation_type
-+        if status == "confirmed" and record.status != "confirmed":
++        # The explicit status argument controls the current review state. Old evidence
++        # remains in provenance, but a deliberate downgrade must not be silently ignored.
++        record.status = status
++        if status == "confirmed":
 +            record.evidence_url = evidence_url
 +            record.quote = quote.strip()[:5000]
 +            record.evidence_date = evidence_date
-+        elif not record.evidence_url:
-+            record.evidence_url = evidence_url
-+            record.quote = quote.strip()[:5000]
-+            record.evidence_date = evidence_date
-+        record.status = "confirmed" if status == "confirmed" or record.status == "confirmed" else status
-+        if record.status == "confirmed":
 +            child.parent_id = parent.id
-+        elif child.parent_id == parent.id:
-+            child.parent_id = None
++        else:
++            if not record.evidence_url:
++                record.evidence_url = evidence_url
++                record.quote = quote.strip()[:5000]
++                record.evidence_date = evidence_date
++            if child.parent_id == parent.id:
++                child.parent_id = None
 +        s.flush()
 +        return {
 +            "id": record.id,
@@ -2377,10 +2428,10 @@ index 27b72cc..c622044 100644
          )
          with self.db.session() as s:
 diff --git a/tests/test_coverage.py b/tests/test_coverage.py
-index 6b86c9b..c0ebec4 100644
+index 6b86c9b..698a3d3 100644
 --- a/tests/test_coverage.py
 +++ b/tests/test_coverage.py
-@@ -111,3 +111,456 @@ def test_orphan_parser_guesses_are_not_counted_as_companies(tmp_path):
+@@ -111,3 +111,530 @@ def test_orphan_parser_guesses_are_not_counted_as_companies(tmp_path):
      with db.session() as s:
          s.add(Employer(name="示例集团总行社会公开招聘"))
      assert "示例集团总行社会公开招聘" not in [r["name"] for r in coverage_report(db, cfg)["items"]]
@@ -2837,6 +2888,80 @@ index 6b86c9b..c0ebec4 100644
 +        statuses = {edge.parent_id: edge.status for edge in edges}
 +        assert statuses[first_id] == "confirmed"
 +        assert any(status == "needs_review" for status in statuses.values())
++
++
++def test_explicit_relationship_downgrade_and_reconfirm_round_trip(tmp_path):
++    from sqlalchemy import select
++
++    from soe_radar.models import Employer, Relationship
++    from soe_radar.relationships import add_relationship
++
++    db = initialize(Settings.model_validate({"data_dir": str(tmp_path / "data")}))
++    with db.session() as s:
++        s.add_all([Employer(name="示例母公司有限公司"), Employer(name="示例子公司有限公司")])
++    evidence = {
++        "evidence_url": "https://example.org/about",
++        "quote": "母公司全资持有子公司",
++        "evidence_date": "2026-01-01",
++    }
++    add_relationship(db, "示例母公司有限公司", "示例子公司有限公司", **evidence)
++    add_relationship(db, "示例母公司有限公司", "示例子公司有限公司", status="needs_review", **evidence)
++    with db.session() as s:
++        relation = s.scalar(select(Relationship))
++        child = s.get(Employer, relation.child_id)
++        assert relation.status == "needs_review"
++        assert child.parent_id is None
++        assert len(relation.provenance) == 2
++    add_relationship(db, "示例母公司有限公司", "示例子公司有限公司", **evidence)
++    with db.session() as s:
++        relation = s.scalar(select(Relationship))
++        child = s.get(Employer, relation.child_id)
++        assert relation.status == "confirmed"
++        assert child.parent_id == relation.parent_id
++    with pytest.raises(ValueError, match="状态"):
++        add_relationship(
++            db,
++            "示例母公司有限公司",
++            "示例子公司有限公司",
++            status="unknown",
++            **evidence,
++        )
++
++
++def test_snapshot_repair_persists_page_bindings_and_is_idempotent(tmp_path):
++    from soe_radar.coverage import repair_registry_snapshots, save_registry
++    from soe_radar.models import RegistrySnapshot
++
++    cfg = Settings.model_validate(
++        {
++            "data_dir": str(tmp_path / "data"),
++            "registries": [
++                {
++                    "id": "repair",
++                    "name": "修复",
++                    "category": "local",
++                    "url": "https://example.gov.cn/list",
++                    "domains": ["example.gov.cn"],
++                }
++            ],
++        }
++    )
++    db = initialize(cfg)
++    saved = save_registry(
++        db, cfg, cfg.registries[0], "<table><tr><td>1</td><td>示例一有限公司</td></tr></table>"
++    )
++    with db.session() as s:
++        row = s.get(RegistrySnapshot, saved["id"])
++        entries = [dict(entry) for entry in row.entries]
++        entries[0]["page_path"] = "registries/broken.html"
++        row.entries = entries
++        row.digest = "legacy-digest"
++    repair_registry_snapshots(db, apply=True)
++    with db.session() as s:
++        row = s.get(RegistrySnapshot, saved["id"])
++        assert row.entries[0]["page_path"] == row.provenance["pages"][0]["path"]
++        assert row.digest != "legacy-digest"
++    assert repair_registry_snapshots(db, apply=False) == []
 diff --git a/tests/test_delivery.py b/tests/test_delivery.py
 new file mode 100644
 index 0000000..a61a0dd

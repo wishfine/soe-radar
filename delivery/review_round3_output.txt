@@ -1,0 +1,2 @@
+{"probe": "explicit_relationship_downgrade", "expected": {"status": "needs_review", "parent_cleared": true}, "actual": {"status": "needs_review", "parent_cleared": true}, "passes": true}
+{"probe": "repaired_page_binding_persists_after_commit", "expected": "registries/7af1d61f6e6f6eed83f326bb7e5ed7f0743d9a22be0e5a3acd11c846293246dc.html", "actual": "registries/7af1d61f6e6f6eed83f326bb7e5ed7f0743d9a22be0e5a3acd11c846293246dc.html", "passes": true}

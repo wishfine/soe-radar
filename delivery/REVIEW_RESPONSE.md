@@ -32,6 +32,19 @@ merge_existing_relationship_edges: no IntegrityError
 
 个人库迁移前备份：`backups/before-review-round2-20261024.tar.gz`。
 
+## 第三轮复审（T1–T2）
+
+- T1：`add_relationship` 的显式 `status` 现在直接决定当前审核状态；旧 confirmed 证据保留在 `provenance`，但显式 `needs_review` 会清除 `parent_id`，不会静默忽略。已补 confirmed → needs_review → confirmed 往返测试和交付导出校验。
+- T2：`repair_registry_snapshots` 现在构造新的 entries 列表并赋值，显式触发 JSON 列变更；页绑定检查独立于 digest 修复，已标记修过的快照仍检查绑定；无法唯一定位的条目写 `page_binding=needs_review`。修复幂等，个人库已执行 `registry-repair-snapshots --apply`。
+
+复现：
+
+```text
+uv run python delivery/review_round3_repro.py
+explicit_relationship_downgrade: true
+repaired_page_binding_persists_after_commit: true
+```
+
 ## 报告口径更正
 
 - 本轮净新增校招机会改为 **28 条**（55→83），其中 2027 届 12 条；`activity_diff.json` 可复核 ID 差集。此前“33 条”是未排除山西结果公示前的旧口径。

@@ -1,4 +1,4 @@
-# 测试与构建输出 · 2026-10-24 12:17 CST
+# 测试与构建输出 · 2026-10-24 13:30 CST
 
 $ uv run pytest -q
 .venv/lib/python3.12/site-packages/fastapi/testclient.py:1
@@ -6,7 +6,7 @@ $ uv run pytest -q
     from starlette.testclient import TestClient as TestClient  # noqa
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-151 passed, 1 warning in 9.75s
+153 passed, 1 warning in 9.76s
 
 $ ruff check src tests
 All checks passed!
