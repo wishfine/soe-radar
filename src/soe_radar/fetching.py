@@ -104,6 +104,7 @@ def extract_page(url: str, html: str) -> Page:
         ".article-content",
         ".article_content",
         ".content_detail",
+        ".zwxl-content",
         "#zoom",
         "#UCAP-CONTENT",
         "article",
@@ -120,17 +121,20 @@ def extract_page(url: str, html: str) -> Page:
     text = re.sub(r"[ \t\xa0]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
 
-    def chrome(target, label):
+    def chrome(target, label, *, width=0, height=0):
+        """Only drop an image when there is positive evidence it is site chrome.
+
+        A large, unlabelled image inside the article can be a recruitment poster.
+        Directory names such as /images/ and words such as banner/share are not
+        enough on their own; dropping those would silently lose real attachments.
+        """
         text = (target + " " + label).lower()
         if re.search(
-            r"(?:logo|icon|qrcode|qr-code|二维码|分享|share|banner|spacer|pixel|button|nav-|/images/col-)",
+            r"(?:logo|icon|qrcode|qr-code|二维码|扫码|分享|spacer|pixel|button|nav-|/images/col-|/images/menu|weixin|weibo)",
             text,
         ):
             return True
-        # Government CMS chrome often lives under /images/ with generic alt text.
-        return "/images/" in target.lower() and not re.search(
-            r"(?:招聘|岗位|公告|简章|海报|条件|职位|job|recruit|campus|poster)", text
-        )
+        return bool((width and width < 100) or (height and height < 100))
 
     ignored_chrome = 0
     attachments = []
@@ -150,11 +154,9 @@ def extract_page(url: str, html: str) -> Page:
             height = int(re.sub(r"\D", "", img.get("height", "") or "0") or 0)
         except ValueError:
             width = height = 0
-        if (width and width < 100) or (height and height < 100):
-            continue
         target = urljoin(url, image_url)
         label = img.get("alt") or "正文图片（待人工读取）"
-        if chrome(target, label):
+        if chrome(target, label, width=width, height=height):
             ignored_chrome += 1
             continue
         if target.startswith(("http://", "https://")) and target not in {a["url"] for a in attachments}:

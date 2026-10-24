@@ -109,3 +109,79 @@ def test_relationship_requires_evidence_and_rejects_cycles(tmp_path):
             quote="错误方向",
             evidence_date="2026-01-02",
         )
+
+
+def test_export_binds_each_employer_to_its_own_page(tmp_path):
+    cfg = delivery_settings(tmp_path).model_copy(
+        update={
+            "registries": [
+                delivery_settings(tmp_path)
+                .registries[0]
+                .model_copy(
+                    update={
+                        "page_urls": ["https://example.gov.cn/list_1"],
+                        "min_entries": 1,
+                    }
+                )
+            ]
+        }
+    )
+    db = initialize(cfg)
+    spec = cfg.registries[0]
+    one = "<table><tr><td>1</td><td>示例一有限公司</td></tr></table>"
+    two = "<table><tr><td>2</td><td>示例二有限公司</td></tr></table>"
+    save_registry(
+        db,
+        cfg,
+        spec,
+        one + two,
+        pages=[
+            {"url": spec.url, "raw": one.encode()},
+            {"url": spec.page_urls[0], "raw": two.encode()},
+        ],
+    )
+    export_delivery(db, cfg, tmp_path / "delivery")
+    rows = {
+        row["原始名称"]: row
+        for row in map(json.loads, (tmp_path / "delivery" / "employers.jsonl").read_text().splitlines())
+    }
+    for name in ("示例一有限公司", "示例二有限公司"):
+        path = tmp_path / "delivery" / rows[name]["证据路径"]
+        assert name in path.read_text(encoding="utf-8")
+
+
+def test_needs_review_relationship_is_not_in_confirmed_file_and_confirmed_child_gets_entry_gap(tmp_path):
+    cfg = delivery_settings(tmp_path)
+    db = initialize(cfg)
+    save_registry(
+        db,
+        cfg,
+        cfg.registries[0],
+        "<table><tr><td>1</td><td>示例子公司有限公司</td></tr></table>",
+    )
+    add_relationship(
+        db,
+        "示例集团有限公司",
+        "示例子公司有限公司",
+        evidence_url="https://example.org/group",
+        quote="所属企业",
+        evidence_date="2026-01-02",
+        status="needs_review",
+    )
+    export_delivery(db, cfg, tmp_path / "delivery")
+    assert (tmp_path / "delivery" / "relationships.jsonl").read_text().strip() == ""
+    gaps = (tmp_path / "delivery" / "gaps.csv").read_text(encoding="utf-8-sig")
+    assert "关系待复核" in gaps
+    add_relationship(
+        db,
+        "示例集团有限公司",
+        "示例子公司有限公司",
+        evidence_url="https://example.org/group",
+        quote="所属企业",
+        evidence_date="2026-01-02",
+        status="confirmed",
+    )
+    export_delivery(db, cfg, tmp_path / "delivery")
+    gaps = (tmp_path / "delivery" / "gaps.csv").read_text(encoding="utf-8-sig")
+    assert "入口未找到" in gaps
+    assert "示例子公司有限公司" in gaps

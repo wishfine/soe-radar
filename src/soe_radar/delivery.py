@@ -76,9 +76,10 @@ def _state_snapshot(db, cfg):
 
 def _copy_evidence(cfg, spec, snapshot, evidence_dir: Path, records: list[dict]):
     if not snapshot:
-        return ""
+        return "", {}
     pages = snapshot.provenance.get("pages") or []
     first_path = ""
+    page_map = {}
     for page in pages:
         source = cfg.data_dir / page.get("path", "")
         if not source.is_file():
@@ -90,6 +91,7 @@ def _copy_evidence(cfg, spec, snapshot, evidence_dir: Path, records: list[dict])
             shutil.copyfile(source, target)
         relative = str(target.relative_to(evidence_dir.parent))
         first_path = first_path or relative
+        page_map[digest] = relative
         records.append(
             {
                 "文件": relative,
@@ -114,7 +116,7 @@ def _copy_evidence(cfg, spec, snapshot, evidence_dir: Path, records: list[dict])
                 "说明": "由原始 HTML 去除标签得到，仅用于复核，不替代原件。",
             }
         )
-    return first_path
+    return first_path, page_map
 
 
 def _manifest_rows(cfg, active, evidence_paths, evidence_hashes):
@@ -138,6 +140,8 @@ def _manifest_rows(cfg, active, evidence_paths, evidence_hashes):
             gap = state.last_error if state and state.last_error else "未取得官方名录入口"
         elif state and state.last_error:
             gap = state.last_error
+        elif provenance.get("tls_verified") is False:
+            gap = "TLS 证书校验未完成；仅作待复核官方页面证据，不据此提升企业性质核验。"
         elif provenance.get("acquisition") == "official_index_excerpt":
             gap = "历史或索引摘录，需按当前官网分页和现行名单复核"
         rows.append(
@@ -172,7 +176,7 @@ def _memberships(cfg, active):
     return memberships
 
 
-def _employer_rows(db, cfg, active, evidence_paths, evidence_hashes):
+def _employer_rows(db, cfg, active, evidence_paths, evidence_hashes, page_evidence):
     memberships = _memberships(cfg, active)
     with db.session() as s:
         employers = list(s.scalars(select(Employer).order_by(Employer.name)))
@@ -220,6 +224,11 @@ def _employer_rows(db, cfg, active, evidence_paths, evidence_hashes):
             status = "当前"
         else:
             status = "待复核"
+        evidence_entry = page_evidence.get((spec.id, entry.get("page_sha256"))) if spec else None
+        evidence_path = (
+            evidence_entry[0] if evidence_entry else (evidence_paths.get(spec.id, "") if spec else "")
+        )
+        evidence_sha = entry.get("page_sha256") or (evidence_hashes.get(spec.id, "") if spec else "")
         rows.append(
             {
                 "id": employer.id,
@@ -230,11 +239,11 @@ def _employer_rows(db, cfg, active, evidence_paths, evidence_hashes):
                 "主管口径": "/".join(sorted({item_spec.category for item_spec, _, _ in member})) or "",
                 "层级": "所属单位" if employer.parent_id else ("集团/一级" if member else "待确认"),
                 "母公司": parent_names.get(employer.parent_id, "") if employer.parent_id else "",
-                "官方来源URL": snapshot.source_url
-                if snapshot
-                else (
+                "官方来源URL": (
                     source.homepage_url or source.url
                     if source
+                    else snapshot.source_url
+                    if snapshot
                     else relation.evidence_url
                     if relation
                     else employer.proof_url
@@ -243,11 +252,13 @@ def _employer_rows(db, cfg, active, evidence_paths, evidence_hashes):
                 "实际访问时间": (snapshot.provenance.get("pages") or [{}])[0].get("fetched_at", "")
                 if snapshot
                 else "",
+                "来源名称": entry.get("source_name", employer.name) if entry else "",
+                "证据页URL": entry.get("page_url", "") if entry else "",
                 "来源原文片段": entry.get("quote", employer.name)
                 if entry
                 else ("来源配置声明的招聘主体" if source else relation.quote if relation else ""),
-                "证据路径": evidence_paths.get(spec.id, "") if spec else "",
-                "证据SHA256": evidence_hashes.get(spec.id, "") if spec else "",
+                "证据路径": evidence_path,
+                "证据SHA256": evidence_sha,
                 "企业官网": entry.get("official_url", "")
                 if entry
                 else (source.homepage_url if source else ""),
@@ -262,7 +273,13 @@ def _employer_rows(db, cfg, active, evidence_paths, evidence_hashes):
 
 def _relationship_rows(db):
     with db.session() as s:
-        rows = list(s.scalars(select(Relationship).order_by(Relationship.created_at)))
+        rows = list(
+            s.scalars(
+                select(Relationship)
+                .where(Relationship.status == "confirmed")
+                .order_by(Relationship.created_at)
+            )
+        )
         parents = {row.id: row.name for row in s.scalars(select(Employer))}
     return [
         {
@@ -359,7 +376,10 @@ def _gap_rows(db, cfg, active, employer_rows):
     with db.session() as s:
         states = {row.id: row for row in s.scalars(select(SourceState))}
         parent_links = [row for row in s.scalars(select(Employer)) if row.parent_id and row.proof_url]
-        relationships = {(row.parent_id, row.child_id) for row in s.scalars(select(Relationship))}
+        relationship_rows = list(s.scalars(select(Relationship)))
+        relationships = {(row.parent_id, row.child_id) for row in relationship_rows}
+        needs_review = [row for row in relationship_rows if row.status != "confirmed"]
+        parents = {row.id: row.name for row in s.scalars(select(Employer))}
     for spec in cfg.registries:
         state, snapshot = active[spec.id]
         if not spec.url:
@@ -465,14 +485,24 @@ def _gap_rows(db, cfg, active, employer_rows):
                 )
             )
     for row in employer_rows:
-        if row["主管口径"] and not any(
-            source.employer == row["原始名称"] or source.name == row["原始名称"] for source in cfg.sources
-        ):
+        names = {row["原始名称"], row["规范名称"], *row.get("别名", [])}
+        matching = [source for source in cfg.sources if source.employer in names or source.name in names]
+        available = [source for source in matching if source.enabled]
+        in_scope = bool(
+            row["主管口径"]
+            or row["母公司"]
+            or row["层级"] in ("集团/一级", "所属单位")
+            or row["状态"].startswith("当前（关系")
+        )
+        if in_scope and not available:
+            issue = "已建档但未配置可用官方招聘入口。"
+            if matching:
+                issue = "仅有已禁用来源，当前没有可用监测入口。"
             rows.append(
                 _gap(
                     "入口未找到",
                     row["原始名称"],
-                    "已建档但未配置官方招聘入口。",
+                    issue,
                     row["实际访问时间"],
                     "从企业官网、集团招聘平台和官方公告列表寻找入口并做列表/详情验证。",
                     "中",
@@ -490,6 +520,17 @@ def _gap_rows(db, cfg, active, employer_rows):
                     "中",
                 )
             )
+    for relationship in needs_review:
+        rows.append(
+            _gap(
+                "关系待复核",
+                parents.get(relationship.child_id, relationship.child_id),
+                "关系证据不足以确认所选法人主体，未计入已确认关系。",
+                relationship.evidence_date,
+                "补充该法人全称对应的独立官方披露及简称映射。",
+                "中",
+            )
+        )
     for source_id, count in source_campus.items():
         pending_count = 0
         with db.session() as s:
@@ -538,10 +579,13 @@ def export_delivery(db, cfg, out_dir: Path):
     active = _state_snapshot(db, cfg)
     evidence_records = []
     evidence_paths, evidence_hashes = {}, {}
+    page_evidence = {}
     for spec in cfg.registries:
         _, snapshot = active[spec.id]
-        path = _copy_evidence(cfg, spec, snapshot, evidence_dir, evidence_records)
+        path, page_map = _copy_evidence(cfg, spec, snapshot, evidence_dir, evidence_records)
         evidence_paths[spec.id] = path
+        for digest, relative in page_map.items():
+            page_evidence[(spec.id, digest)] = (relative, digest)
         if snapshot:
             pages = snapshot.provenance.get("pages") or []
             evidence_hashes[spec.id] = pages[0].get("sha256", "") if pages else snapshot.digest
@@ -591,7 +635,7 @@ def export_delivery(db, cfg, out_dir: Path):
             }
         )
     manifest = _manifest_rows(cfg, active, evidence_paths, evidence_hashes)
-    employers = _employer_rows(db, cfg, active, evidence_paths, evidence_hashes)
+    employers = _employer_rows(db, cfg, active, evidence_paths, evidence_hashes, page_evidence)
     relationships = _relationship_rows(db)
     sources = _source_rows(db, cfg)
     gaps = _gap_rows(db, cfg, active, employers)

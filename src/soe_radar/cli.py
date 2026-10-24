@@ -190,6 +190,21 @@ def doctor(
     db.engine.dispose()
 
 
+@app.command("employer-merge-aliases")
+def employer_merge_aliases(
+    apply: bool = typer.Option(False, "--apply", help="实际合并；默认只预览"),
+):
+    """合并括号别名/全半角括号造成的重复企业身份，保留活动、关系和审核记录。"""
+    from .identity import merge_alias_employers
+
+    cfg = load_settings()
+    db = initialize(cfg)
+    try:
+        output({"plans": merge_alias_employers(db, apply=apply), "applied": apply})
+    finally:
+        db.engine.dispose()
+
+
 @app.command("relationship-add")
 def relationship_add(
     parent: str = typer.Option(..., help="母公司全称，必须已建档"),
@@ -198,6 +213,7 @@ def relationship_add(
     quote: str = typer.Option(..., help="官方原文中说明隶属关系的片段"),
     evidence_date: str = typer.Option(..., help="证据发布日期 YYYY-MM-DD"),
     relation_type: str = typer.Option("subsidiary", help="关系类型"),
+    status: str = typer.Option("confirmed", help="confirmed 或 needs_review"),
 ):
     """录入有原文证据的母子公司关系；缺证据时拒绝写入。"""
     from .relationships import add_relationship
@@ -214,6 +230,7 @@ def relationship_add(
                 evidence_url=evidence_url,
                 quote=quote,
                 evidence_date=evidence_date,
+                status=status,
             )
         )
     finally:
@@ -267,6 +284,11 @@ def registry_import_html(
     proof_url: str = typer.Option(..., "--proof-url", help="页面官方 URL"),
     published_at: str = typer.Option("", help="页面可见发布日期 YYYY-MM-DD"),
     note: str = typer.Option("", help="取得方式、TLS/验证码等限制说明"),
+    tls_verified: bool = typer.Option(
+        False,
+        "--tls-verified/--tls-unverified",
+        help="人工保存时是否完成了证书校验；默认不提升企业性质核验等级",
+    ),
     confirm_official: bool = typer.Option(False, "--confirm-official", help="确认页面来自官方域名"),
 ):
     """导入人工保存的官方 HTML；用于自动抓取被 TLS 链或超时阻断时留证。"""
@@ -296,7 +318,10 @@ def registry_import_html(
             status="imported",
             publication=published_at or None,
             provenance={
-                "acquisition": "manual_official_html",
+                "acquisition": "manual_official_html"
+                if tls_verified
+                else "manual_official_html_unverified_tls",
+                "tls_verified": tls_verified,
                 "scope": spec.scope,
                 "complete": False,
                 "note": note or "人工保存官方 HTML；未由程序直接请求。",

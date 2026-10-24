@@ -284,3 +284,31 @@ def test_spa_announcement_fragments_are_preserved_and_do_not_collapse_ids():
     assert canonical(one) != canonical(two)
     assert canonical(one) == canonical(one.replace("/#/notice-details", "/notice-details"))
     assert canonical("https://example.org/notice#footer") == "https://example.org/notice"
+
+
+def test_unlabelled_large_body_poster_is_kept_as_attachment():
+    poster = "https://example.org/images/20261023/123456.jpg"
+    page = extract_page(
+        "https://example.org/recruit",
+        "<article><h1>示例公司2027校园招聘</h1><p>详见下方海报</p>"
+        f'<img src="{poster}" width="1000" height="2000"></article>',
+    )
+    assert any(item["url"] == poster for item in page.attachments)
+
+
+def test_recruitment_banner_is_kept_but_qr_and_logo_are_ignored():
+    banner = extract_page(
+        "https://example.org/recruit",
+        '<article><img src="/images/banner-recruit.jpg" width="1200" height="400" alt="招聘横幅"></article>',
+    )
+    assert any(item["url"].endswith("banner-recruit.jpg") for item in banner.attachments)
+    qr = extract_page(
+        "https://example.org/recruit",
+        '<article><img src="/images/qrcode.png" alt="扫码关注"></article>',
+    )
+    assert not any(item["url"] for item in qr.attachments)
+    logo = extract_page(
+        "https://example.org/recruit",
+        '<article><img src="/images/logo.png" alt="网站标志"></article>',
+    )
+    assert not any(item["url"] for item in logo.attachments)

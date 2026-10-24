@@ -178,10 +178,9 @@ def test_text_directory_keeps_aliases_and_separates_profile_links(tmp_path):
         '<div class="mainContent">监管企业名录 示例一集团有限公司 '
         "示例二集团有限责任公司（示例二有限公司）</div>"
     )
-    assert [row["name"] for row in parse_registry(html, spec)] == [
-        "示例一集团有限公司",
-        "示例二集团有限责任公司（示例二有限公司）",
-    ]
+    rows = {row["name"]: row for row in parse_registry(html, spec)}
+    assert set(rows) == {"示例一集团有限公司", "示例二集团有限责任公司"}
+    assert "示例二有限公司" in rows["示例二集团有限责任公司"]["aliases"]
 
     links = RegistryConfig(
         id="links",
@@ -201,3 +200,205 @@ def test_text_directory_keeps_aliases_and_separates_profile_links(tmp_path):
     assert rows["示例一集团有限公司"]["official_url"] == "https://one.example/"
     assert rows["示例二有限责任公司"]["official_url"] == ""
     assert rows["示例二有限责任公司"]["profile_url"].endswith("/profile")
+
+
+def test_partial_page_failure_never_replaces_known_membership(tmp_path):
+    import asyncio
+
+    import httpx
+
+    from soe_radar.coverage import coverage_report, refresh_registries, save_registry
+    from soe_radar.fetching import FetchFailure
+    from soe_radar.models import RegistryState
+
+    cfg = Settings.model_validate(
+        {
+            "data_dir": str(tmp_path / "data"),
+            "registries": [
+                {
+                    "id": "multi",
+                    "name": "分页名录",
+                    "category": "local",
+                    "url": "https://example.gov.cn/list",
+                    "page_urls": ["https://example.gov.cn/list_1"],
+                    "domains": ["example.gov.cn"],
+                    "min_entries": 1,
+                }
+            ],
+        }
+    )
+    db = initialize(cfg)
+    spec = cfg.registries[0]
+    first = "<table><tr><td>1</td><td>示例一有限公司</td></tr></table>"
+    second = "<table><tr><td>2</td><td>示例二有限公司</td></tr></table>"
+    saved = save_registry(
+        db,
+        cfg,
+        spec,
+        first + second,
+        pages=[
+            {"url": spec.url, "raw": first.encode()},
+            {"url": spec.page_urls[0], "raw": second.encode()},
+        ],
+    )
+
+    class MockFetcher:
+        network_attempts = []
+
+        async def get(self, url, *args, **kwargs):
+            if url.endswith("_1"):
+                raise FetchFailure("HTTP 503")
+            return httpx.Response(200, text=first, request=httpx.Request("GET", url))
+
+    asyncio.run(refresh_registries(db, cfg, fetcher=MockFetcher()))
+    report = coverage_report(db, cfg)
+    assert report["summary"]["registry_entities"] == 2
+    with db.session() as s:
+        state = s.get(RegistryState, spec.id)
+        assert state.active_snapshot_id == saved["id"]
+        assert state.status == "partial"
+
+
+def test_bracket_alias_reuses_existing_employer_and_preserves_source_name(tmp_path):
+    from sqlalchemy import select
+
+    from soe_radar.coverage import save_registry
+    from soe_radar.models import Employer
+
+    cfg = Settings.model_validate(
+        {
+            "data_dir": str(tmp_path / "data"),
+            "registries": [
+                {
+                    "id": "alias",
+                    "name": "别名名录",
+                    "category": "central",
+                    "url": "https://example.gov.cn/list",
+                    "domains": ["example.gov.cn"],
+                    "min_entries": 1,
+                }
+            ],
+        }
+    )
+    db = initialize(cfg)
+    with db.session() as s:
+        s.add(Employer(name="中国旅游集团有限公司", aliases=["香港中旅（集团）有限公司"]))
+    save_registry(
+        db,
+        cfg,
+        cfg.registries[0],
+        "<table><tr><td>1</td><td>中国旅游集团有限公司[香港中旅（集团）有限公司]</td></tr></table>",
+    )
+    with db.session() as s:
+        rows = list(s.scalars(select(Employer).where(Employer.name.like("中国旅游集团有限公司%"))))
+    assert len(rows) == 1
+    assert "中国旅游集团有限公司[香港中旅（集团）有限公司]" in rows[0].aliases
+
+
+def test_text_adapter_merges_links_and_plain_text_entries(tmp_path):
+    from soe_radar.config import RegistryConfig
+    from soe_radar.coverage import parse_registry
+
+    spec = RegistryConfig(
+        id="mixed",
+        name="混合名录",
+        category="local",
+        url="https://example.gov.cn/list",
+        domains=["example.gov.cn"],
+        adapter="text",
+        entry_selector="#list",
+        min_entries=1,
+    )
+    rows = parse_registry(
+        '<div id="list"><a href="https://one.example">示例一集团有限公司</a>'
+        "<p>示例二集团有限公司</p><p>示例三集团有限公司</p></div>",
+        spec,
+    )
+    assert [row["name"] for row in rows] == [
+        "示例一集团有限公司",
+        "示例三集团有限公司",
+        "示例二集团有限公司",
+    ]
+
+
+def test_single_page_and_csv_content_hash_is_the_file_hash(tmp_path):
+    import hashlib
+
+    from soe_radar.coverage import import_registry_csv, save_registry
+    from soe_radar.models import RegistrySnapshot
+
+    cfg = Settings.model_validate(
+        {
+            "data_dir": str(tmp_path / "data"),
+            "registries": [
+                {
+                    "id": "hash",
+                    "name": "哈希名录",
+                    "category": "local",
+                    "url": "https://example.gov.cn/list",
+                    "domains": ["example.gov.cn"],
+                    "min_entries": 1,
+                }
+            ],
+        }
+    )
+    db = initialize(cfg)
+    spec = cfg.registries[0]
+    saved = save_registry(db, cfg, spec, "<table><tr><td>1</td><td>示例一有限公司</td></tr></table>")
+    with db.session() as s:
+        page = s.get(RegistrySnapshot, saved["id"]).provenance["pages"][0]
+        assert page["sha256"] == hashlib.sha256((cfg.data_dir / page["path"]).read_bytes()).hexdigest()
+    csv_saved = import_registry_csv(
+        db,
+        cfg,
+        spec,
+        "企业名称\n示例二有限公司\n".encode(),
+        "https://example.gov.cn/list",
+        confirmed=True,
+    )
+    with db.session() as s:
+        page = s.get(RegistrySnapshot, csv_saved["id"]).provenance["pages"][0]
+        assert page["sha256"] == hashlib.sha256((cfg.data_dir / page["path"]).read_bytes()).hexdigest()
+
+
+def test_merge_alias_employers_preserves_opportunity_and_personal_state(tmp_path):
+    from sqlalchemy import select
+
+    from soe_radar.identity import merge_alias_employers
+    from soe_radar.models import Activity, Batch, Employer, Opportunity, PersonalState
+
+    cfg = Settings.model_validate({"data_dir": str(tmp_path / "data")})
+    db = initialize(cfg)
+    with db.session() as s:
+        target = Employer(name="中国旅游集团有限公司")
+        duplicate = Employer(name="中国旅游集团有限公司[香港中旅（集团）有限公司]")
+        s.add_all([target, duplicate])
+        s.flush()
+        activity = Activity(employer_id=duplicate.id, identity="test-activity", title="示例招聘")
+        s.add(activity)
+        s.flush()
+        batch = Batch(activity_id=activity.id, name="正式批")
+        s.add(batch)
+        s.flush()
+        opportunity = Opportunity(
+            activity_id=activity.id,
+            batch_id=batch.id,
+            employer_id=duplicate.id,
+            source_id="test",
+            official_url="https://example.org/job",
+            title="示例招聘",
+        )
+        s.add(opportunity)
+        s.flush()
+        s.add(PersonalState(opportunity_id=opportunity.id, saved=True, notes="保留"))
+        opportunity_id = opportunity.id
+        target_id = target.id
+    plans = merge_alias_employers(db, apply=True)
+    assert len(plans) == 1
+    with db.session() as s:
+        employers = list(s.scalars(select(Employer).where(Employer.name.like("中国旅游集团有限公司%"))))
+        assert len(employers) == 1
+        opportunity = s.get(Opportunity, opportunity_id)
+        assert opportunity.employer_id == target_id
+        state = s.get(PersonalState, opportunity_id)
+        assert state.saved is True and state.notes == "保留"

@@ -55,6 +55,8 @@ def add_relationship(
         record.status = status
         if status == "confirmed":
             child.parent_id = parent.id
+        elif child.parent_id == parent.id:
+            child.parent_id = None
         s.flush()
         return {
             "id": record.id,

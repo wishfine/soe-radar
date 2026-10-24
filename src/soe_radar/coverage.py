@@ -19,11 +19,28 @@ COMPANY_RE = re.compile(
     r"(?:公司|集团|银行|出版社|报刊社|总局)"
     r"(?:[（(\[][^（）()\[\]]{2,80}[）)\]])?"
 )
+ALIAS_RE = re.compile(r"^(.+?(?:公司|集团|银行|出版社|报刊社|总局))[\[（(](.+)[\]）)]$")
+
+
+def split_alias(name):
+    """Split a display form like 中国旅游集团...[香港中旅...] into legal name and aliases."""
+    value = re.sub(r"\s+", "", name or "")
+    match = ALIAS_RE.fullmatch(value)
+    if not match:
+        return value, []
+    canonical, alias = match.group(1).strip(), match.group(2).strip()
+    aliases = [alias]
+    if value != canonical:
+        aliases.append(value)
+    return canonical, aliases
 
 
 def _entry(name, *, official_url="", profile_url="", rank=None, quote=""):
+    canonical, aliases = split_alias(name)
     return {
-        "name": name,
+        "name": canonical,
+        "source_name": name,
+        "aliases": aliases,
         "official_url": official_url,
         "profile_url": profile_url,
         "rank": rank,
@@ -71,7 +88,7 @@ def _is_company(name, *, strict=True):
     return False
 
 
-def parse_registry(html, spec):
+def parse_registry(html, spec, *, enforce_min=True):
     soup = BeautifulSoup(html, "html.parser")
     entries = {}
     if spec.adapter in ("links", "numbered", "text"):
@@ -79,33 +96,36 @@ def parse_registry(html, spec):
             raise ValueError("非表格名录必须配置正文选择器，不能从全站猜测企业名单")
         for node in soup.select(spec.entry_selector):
             if spec.adapter == "text":
-                # Prefer one anchor per enterprise; fall back to whitespace-separated plain text.
+                # A directory can mix linked enterprises and plain-text enterprises in one node.
                 anchors = [
                     anchor
                     for anchor in node.select("a[href]")
                     if _is_company(anchor.get_text(" ", strip=True).strip())
                 ]
-                if anchors:
-                    for anchor in anchors:
-                        name = anchor.get_text(" ", strip=True).strip()
-                        name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", name).lstrip("（(【[")
-                        if not _is_company(name):
-                            continue
-                        official_url, profile_url = _link_target(anchor, spec.url, name)
-                        entries[name] = _entry(
-                            name,
-                            official_url=official_url,
-                            profile_url=profile_url,
-                            quote=name,
-                        )
-                    continue
-                for token in node.get_text(" ", strip=True).split():
+                for anchor in anchors:
+                    name = anchor.get_text(" ", strip=True).strip()
+                    name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", name).lstrip("（(【[")
+                    if not _is_company(name):
+                        continue
+                    official_url, profile_url = _link_target(anchor, spec.url, name)
+                    entries[name] = _entry(
+                        name,
+                        official_url=official_url,
+                        profile_url=profile_url,
+                        quote=name,
+                    )
+                # Remove anchors from a copy before reading the remaining plain text.
+                clone = BeautifulSoup(str(node), "html.parser")
+                for anchor in clone.select("a[href]"):
+                    anchor.decompose()
+                plain_text = clone.get_text(" ", strip=True)
+                for token in plain_text.split():
                     name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", token)
                     if name.startswith(("（", "(", "【", "[")):
                         name = name.lstrip("（(【[").rstrip("）)】]")
                     if not _is_company(name):
                         continue
-                    entries[name] = _entry(name, quote=token)
+                    entries.setdefault(name, _entry(name, quote=token))
                 continue
             values = (
                 [node.get_text(" ", strip=True)]
@@ -165,7 +185,7 @@ def parse_registry(html, spec):
                     ),
                 )
     entries = {name: entry for name, entry in entries.items() if name not in spec.exclude_names}
-    if len(entries) < spec.min_entries:
+    if enforce_min and len(entries) < spec.min_entries:
         raise ValueError(f"名录未取得足够的编号企业行（{len(entries)}/{spec.min_entries}）；保留已有版本")
     return sorted(entries.values(), key=lambda x: x["name"])
 
@@ -206,9 +226,22 @@ def save_registry(
     publication=None,
     error="",
     provenance=None,
+    activate=True,
 ):
     if not spec.url or not on_domains(spec.url, spec.domains):
         raise ValueError("名录缺少已确认的官方入口")
+    if pages:
+        return save_registry_pages(
+            db,
+            cfg,
+            spec,
+            pages,
+            status=status,
+            publication=publication,
+            error=error,
+            provenance=provenance,
+            activate=activate,
+        )
     entries = parse_registry(html, spec)
     return _save_entries(
         db,
@@ -219,10 +252,60 @@ def save_registry(
         spec.url,
         "html",
         status,
-        pages=pages,
         publication=publication or publication_date(html),
         error=error,
         provenance=provenance,
+        activate=activate,
+    )
+
+
+def save_registry_pages(
+    db,
+    cfg,
+    spec,
+    pages,
+    *,
+    status="success",
+    publication=None,
+    error="",
+    provenance=None,
+    activate=True,
+):
+    """Parse each page separately so every enterprise keeps its own page evidence."""
+    merged = {}
+    for index, page in enumerate(pages):
+        text = page["raw"].decode("utf-8", "replace")
+        page_digest = hashlib.sha256(page["raw"]).hexdigest()
+        parsed = parse_registry(text, spec, enforce_min=False)
+        for entry in parsed:
+            entry["page_url"] = page["url"]
+            entry["page_index"] = index
+            entry["page_sha256"] = page_digest
+            existing = merged.get(entry["name"])
+            if existing:
+                existing["aliases"] = list(
+                    dict.fromkeys([*existing.get("aliases", []), *entry.get("aliases", [])])
+                )
+            else:
+                merged[entry["name"]] = entry
+    entries = sorted(merged.values(), key=lambda x: x["name"])
+    if len(entries) < spec.min_entries:
+        raise ValueError(f"名录未取得足够的编号企业行（{len(entries)}/{spec.min_entries}）；保留已有版本")
+    combined = b"\n".join(page["raw"] for page in pages)
+    return _save_entries(
+        db,
+        cfg,
+        spec,
+        entries,
+        combined,
+        spec.url,
+        "html",
+        status,
+        pages=pages,
+        publication=publication or publication_date(pages[0]["raw"].decode("utf-8", "replace")),
+        error=error,
+        provenance=provenance,
+        activate=activate,
     )
 
 
@@ -294,6 +377,7 @@ def _save_entries(
     pages=None,
     publication=None,
     error="",
+    activate=True,
 ):
     folder = cfg.data_dir / "registries"
     folder.mkdir(parents=True, exist_ok=True)
@@ -318,18 +402,26 @@ def _save_entries(
         digest = hashlib.sha256(digest_input).hexdigest()
     else:
         digest = hashlib.sha256(source_url.encode() + b"\0" + raw).hexdigest()
-        path = folder / (digest + "." + extension)
+        content_digest = hashlib.sha256(raw).hexdigest()
+        path = folder / (content_digest + "." + extension)
         if not path.exists():
             path.write_bytes(raw)
         page_records = [
             {
                 "url": source_url,
-                "sha256": digest,
+                "sha256": content_digest,
                 "path": str(path.relative_to(cfg.data_dir)),
                 "fetched_at": stamp(),
             }
         ]
     raw_path = page_records[0]["path"]
+    path_by_sha = {record["sha256"]: record for record in page_records}
+    for entry in entries:
+        digest = entry.get("page_sha256") or page_records[0]["sha256"]
+        record = path_by_sha.get(digest, page_records[0])
+        entry.setdefault("page_url", record["url"])
+        entry.setdefault("page_sha256", record["sha256"])
+        entry["page_path"] = record["path"]
     details = dict(
         provenance
         or {
@@ -370,16 +462,81 @@ def _save_entries(
         if not state:
             state = RegistryState(id=spec.id)
             s.add(state)
-        # Missing enterprises remain in older versions; never delete their history.
+        # Match canonical names and confirmed aliases; never create a second identity for a display alias.
+        existing = list(s.scalars(select(Employer)))
+        by_name = {row.name: row for row in existing}
+        by_alias = {}
+        for row in existing:
+            for alias in row.aliases or []:
+                by_alias.setdefault(alias, row)
+        trusted = details.get("tls_verified", True)
         for entry in entries:
-            employer = s.scalar(select(Employer).where(Employer.name == entry["name"]))
+            canonical = entry["name"]
+            aliases = [value for value in entry.get("aliases", []) if value]
+            source_name = entry.get("source_name", canonical)
+            employer = by_name.get(canonical) or by_alias.get(canonical)
             if not employer:
-                s.add(Employer(name=entry["name"], org_type="soe", proof_url=source_url, verified_at=stamp()))
-            elif employer.org_type == "unknown":
-                employer.org_type, employer.proof_url, employer.verified_at = "soe", source_url, stamp()
-        state.active_snapshot_id = snapshot.id
+                for alias in aliases:
+                    employer = by_name.get(alias) or by_alias.get(alias)
+                    if employer:
+                        break
+            if not employer:
+                employer = Employer(
+                    name=canonical,
+                    aliases=aliases,
+                    org_type="soe" if trusted else "unknown",
+                    proof_url=source_url,
+                    verified_at=stamp() if trusted else None,
+                )
+                s.add(employer)
+                by_name[canonical] = employer
+            else:
+                merged = list(dict.fromkeys([*(employer.aliases or []), *aliases, source_name]))
+                employer.aliases = [value for value in merged if value != employer.name]
+                if trusted:
+                    if employer.org_type == "unknown":
+                        employer.org_type, employer.proof_url, employer.verified_at = (
+                            "soe",
+                            source_url,
+                            stamp(),
+                        )
+                elif employer.proof_url == source_url and employer.org_type == "soe":
+                    # A manual/unverified-TLS list must not silently promote ownership verification.
+                    employer.org_type, employer.verified_at = "unknown", None
+            for alias in aliases + ([source_name] if source_name != canonical else []):
+                by_alias.setdefault(alias, employer)
+        if not trusted:
+            other_names = set()
+            for other in cfg.registries:
+                if other.id == spec.id:
+                    continue
+                other_state = s.get(RegistryState, other.id)
+                other_snapshot = (
+                    s.get(RegistrySnapshot, other_state.active_snapshot_id)
+                    if other_state and other_state.active_snapshot_id
+                    else None
+                )
+                if other_snapshot:
+                    other_names.update(entry["name"] for entry in other_snapshot.entries)
+            source_names = set()
+            for source in cfg.sources:
+                if source.employer:
+                    source_names.add(source.employer)
+                    source_names.update(source.aliases or [])
+            for entry in entries:
+                employer = by_name.get(entry["name"]) or by_alias.get(entry["name"])
+                if not employer:
+                    continue
+                covered = employer.name in other_names or employer.name in source_names
+                covered = covered or any(alias in source_names for alias in (employer.aliases or []))
+                if not covered and employer.proof_url and on_domains(employer.proof_url, spec.domains):
+                    employer.org_type, employer.verified_at = "unknown", None
+        if activate:
+            state.active_snapshot_id = snapshot.id
         state.status = status
-        state.last_success = state.last_attempt = stamp()
+        state.last_attempt = stamp()
+        if activate and status in ("success", "imported", "partial"):
+            state.last_success = state.last_attempt
         state.last_error = error[:300]
         return {
             "id": snapshot.id,
@@ -387,6 +544,7 @@ def _save_entries(
             "count": len(entries),
             "digest": digest,
             "pages": len(page_records),
+            "activated": activate,
         }
 
 
@@ -440,6 +598,12 @@ async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
                 continue
             combined = "\n".join(page["raw"].decode("utf-8", "replace") for page in pages)
             status = "success" if not errors else "partial"
+            with db.session() as session:
+                current = session.get(RegistryState, spec.id)
+                has_active = bool(current and current.active_snapshot_id)
+            # Never replace a known membership set with a partial page set. The failed
+            # pages may contain enterprises that are absent from this fetch.
+            activate = not errors or not has_active
             try:
                 saved = save_registry(
                     db,
@@ -450,6 +614,7 @@ async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
                     status=status,
                     publication=publication_date(pages[0]["raw"].decode("utf-8", "replace")),
                     error="；".join(errors),
+                    activate=activate,
                 )
                 results.append({"status": status, "error": "；".join(errors)[:300], **saved})
             except ValueError as exc:
