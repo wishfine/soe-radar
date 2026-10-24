@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
 from bs4 import BeautifulSoup
 from sqlalchemy import select
 
+from .extraction import PARSER_VERSION
 from .models import Employer, Opportunity, RegistrySnapshot, RegistryState, SourceState, stamp
 from .schemas import local_now
 from .urls import on_domains, public_url
@@ -363,6 +366,14 @@ def import_registry_csv(db, cfg, spec, content, proof_url, *, confirmed=False):
     )
 
 
+def snapshot_digest(pages):
+    """Version identity over every page URL/content and the parser version."""
+    digest = hashlib.sha256(PARSER_VERSION.encode() + b"\0")
+    for page in pages:
+        digest.update(page["url"].encode() + b"\0" + page["raw"] + b"\0")
+    return digest.hexdigest()
+
+
 def _save_entries(
     db,
     cfg,
@@ -383,7 +394,6 @@ def _save_entries(
     folder.mkdir(parents=True, exist_ok=True)
     page_records = []
     if pages:
-        digest_input = b""
         for page in pages:
             page_raw = page["raw"]
             page_digest = hashlib.sha256(page_raw).hexdigest()
@@ -398,10 +408,7 @@ def _save_entries(
                     "fetched_at": stamp(),
                 }
             )
-            digest_input += page["url"].encode() + b"\0" + page_raw + b"\0"
-        digest = hashlib.sha256(digest_input).hexdigest()
     else:
-        digest = hashlib.sha256(source_url.encode() + b"\0" + raw).hexdigest()
         content_digest = hashlib.sha256(raw).hexdigest()
         path = folder / (content_digest + "." + extension)
         if not path.exists():
@@ -414,11 +421,12 @@ def _save_entries(
                 "fetched_at": stamp(),
             }
         ]
+    snapshot_id_digest = snapshot_digest(pages or [{"url": source_url, "raw": raw}])
     raw_path = page_records[0]["path"]
     path_by_sha = {record["sha256"]: record for record in page_records}
     for entry in entries:
-        digest = entry.get("page_sha256") or page_records[0]["sha256"]
-        record = path_by_sha.get(digest, page_records[0])
+        entry_digest = entry.get("page_sha256") or page_records[0]["sha256"]
+        record = path_by_sha.get(entry_digest, page_records[0])
         entry.setdefault("page_url", record["url"])
         entry.setdefault("page_sha256", record["sha256"])
         entry["page_path"] = record["path"]
@@ -438,12 +446,24 @@ def _save_entries(
         details["published_at"] = publication
     if error:
         details["fetch_error"] = error[:300]
+    entries_fingerprint = hashlib.sha256(
+        json.dumps(entries, ensure_ascii=False, sort_keys=True).encode()
+    ).hexdigest()
     with db.session() as s:
+        digest = snapshot_id_digest
         snapshot = s.scalar(
             select(RegistrySnapshot).where(
                 RegistrySnapshot.registry_id == spec.id, RegistrySnapshot.digest == digest
             )
         )
+        if snapshot and snapshot.entries != entries:
+            # Same source bytes with a different parse result must not reuse stale entries.
+            digest = hashlib.sha256((snapshot_id_digest + entries_fingerprint).encode()).hexdigest()
+            snapshot = s.scalar(
+                select(RegistrySnapshot).where(
+                    RegistrySnapshot.registry_id == spec.id, RegistrySnapshot.digest == digest
+                )
+            )
         if not snapshot:
             snapshot = RegistrySnapshot(
                 registry_id=spec.id,
@@ -456,7 +476,7 @@ def _save_entries(
             s.add(snapshot)
             s.flush()
         else:
-            # Same content can gain better provenance without creating a duplicate version.
+            # Same identity and same parsed entries can gain better provenance.
             snapshot.provenance = details
         state = s.get(RegistryState, spec.id)
         if not state:
@@ -557,6 +577,74 @@ def registry_failure(db, registry_id, reason):
         state.status = "error"
         state.last_attempt = stamp()
         state.last_error = reason[:300]
+
+
+def repair_registry_snapshots(db, *, apply=False):
+    """Recompute version digests and per-entry page bindings for legacy snapshots."""
+    plans = []
+    with db.session() as s:
+        snapshots = list(s.scalars(select(RegistrySnapshot)))
+        for snapshot in snapshots:
+            pages = (snapshot.provenance or {}).get("pages") or []
+            if not pages or (snapshot.provenance or {}).get("digest_repaired_from"):
+                continue
+            raw_pages = []
+            for page in pages:
+                source = Path(db.path).parent / page.get("path", "")
+                if not source.is_file():
+                    raw_pages = []
+                    break
+                raw_pages.append({"url": page["url"], "raw": source.read_bytes()})
+            if not raw_pages:
+                plans.append(
+                    {
+                        "id": snapshot.id,
+                        "registry_id": snapshot.registry_id,
+                        "old_digest": snapshot.digest,
+                        "new_digest": None,
+                        "skipped": "原件缺失，无法重算",
+                    }
+                )
+                continue
+            correct = snapshot_digest(raw_pages)
+            if snapshot.digest != correct:
+                plans.append(
+                    {
+                        "id": snapshot.id,
+                        "registry_id": snapshot.registry_id,
+                        "old_digest": snapshot.digest,
+                        "new_digest": correct,
+                    }
+                )
+        if not apply:
+            return plans
+        for plan in plans:
+            if not plan.get("new_digest"):
+                continue
+            snapshot = s.get(RegistrySnapshot, plan["id"])
+            pages = (snapshot.provenance or {}).get("pages") or []
+            correct = plan["new_digest"]
+            existing = s.scalar(
+                select(RegistrySnapshot).where(
+                    RegistrySnapshot.registry_id == snapshot.registry_id,
+                    RegistrySnapshot.digest == correct,
+                    RegistrySnapshot.id != snapshot.id,
+                )
+            )
+            if existing:
+                correct = hashlib.sha256((correct + snapshot.id).encode()).hexdigest()
+            provenance = dict(snapshot.provenance or {})
+            provenance["digest_repaired_from"] = plan["old_digest"]
+            provenance["digest_repair_note"] = "旧版整页摘要被末页摘要覆盖；按全部页面内容与解析版本重算。"
+            path_by_sha = {page["sha256"]: page for page in pages}
+            for entry in snapshot.entries:
+                page = path_by_sha.get(entry.get("page_sha256"))
+                if page:
+                    entry["page_url"] = entry.get("page_url") or page["url"]
+                    entry["page_path"] = page["path"]
+            snapshot.digest = correct
+            snapshot.provenance = provenance
+        return plans
 
 
 async def refresh_registries(db, cfg, ids=None, *, fetcher=None):

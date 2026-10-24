@@ -41,6 +41,7 @@ class Relationship(Base):
     quote: Mapped[str] = mapped_column(Text)
     evidence_date: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, default="confirmed")
+    provenance: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[str] = mapped_column(String, default=stamp)
     __table_args__ = (UniqueConstraint("parent_id", "child_id"),)
 

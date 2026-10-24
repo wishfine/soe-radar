@@ -277,6 +277,21 @@ def registry_refresh(ids: str | None = typer.Option(None, help="逗号分隔名�
     db.engine.dispose()
 
 
+@app.command("registry-repair-snapshots")
+def registry_repair_snapshots(
+    apply: bool = typer.Option(False, "--apply", help="实际重算并写入；默认只预览"),
+):
+    """修复历史名录快照的整页摘要和逐条页面绑定。"""
+    from .coverage import repair_registry_snapshots
+
+    cfg = load_settings()
+    db = initialize(cfg)
+    try:
+        output({"plans": repair_registry_snapshots(db, apply=apply), "applied": apply})
+    finally:
+        db.engine.dispose()
+
+
 @app.command("registry-import-html")
 def registry_import_html(
     registry: str = typer.Option(..., "--registry", help="名录 id"),

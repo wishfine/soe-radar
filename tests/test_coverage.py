@@ -402,3 +402,165 @@ def test_merge_alias_employers_preserves_opportunity_and_personal_state(tmp_path
         assert opportunity.employer_id == target_id
         state = s.get(PersonalState, opportunity_id)
         assert state.saved is True and state.notes == "保留"
+
+
+def test_changed_nonfinal_page_creates_new_snapshot_with_all_entries(tmp_path):
+    from soe_radar.coverage import coverage_report, save_registry
+    from soe_radar.models import RegistrySnapshot
+
+    cfg = Settings.model_validate(
+        {
+            "data_dir": str(tmp_path / "data"),
+            "registries": [
+                {
+                    "id": "multi-change",
+                    "name": "多页变更",
+                    "category": "local",
+                    "url": "https://example.gov.cn/list",
+                    "domains": ["example.gov.cn"],
+                    "min_entries": 1,
+                }
+            ],
+        }
+    )
+    db = initialize(cfg)
+    spec = cfg.registries[0]
+    first = "<table><tr><td>1</td><td>前页企业有限公司</td></tr></table>"
+    changed = first + "<table><tr><td>3</td><td>前页新增有限公司</td></tr></table>"
+    second = "<table><tr><td>2</td><td>末页企业有限公司</td></tr></table>"
+
+    def save(page_one):
+        return save_registry(
+            db,
+            cfg,
+            spec,
+            page_one + second,
+            pages=[
+                {"url": spec.url, "raw": page_one.encode()},
+                {"url": spec.url + "?page=2", "raw": second.encode()},
+            ],
+        )
+
+    before = save(first)
+    after = save(changed)
+    assert before["id"] != after["id"]
+    assert after["count"] == 3
+    assert coverage_report(db, cfg)["summary"]["registry_entities"] == 3
+    with db.session() as s:
+        assert len(s.get(RegistrySnapshot, after["id"]).entries) == 3
+
+
+def test_merge_alias_employers_preserves_confirmed_parent_pointer(tmp_path):
+    from sqlalchemy import select
+
+    from soe_radar.identity import merge_alias_employers
+    from soe_radar.models import Employer, Relationship
+
+    cfg = Settings.model_validate({"data_dir": str(tmp_path / "data")})
+    db = initialize(cfg)
+    with db.session() as s:
+        parent = Employer(name="示例母公司有限公司")
+        target = Employer(name="示例子公司有限公司")
+        duplicate = Employer(name="示例子公司有限公司[旧名有限公司]")
+        s.add_all([parent, target, duplicate])
+        s.flush()
+        duplicate.parent_id = parent.id
+        s.add(
+            Relationship(
+                parent_id=parent.id,
+                child_id=duplicate.id,
+                relation_type="subsidiary",
+                evidence_url="https://example.org/confirmed",
+                quote="母公司持有子公司全部股权",
+                evidence_date="2026-01-01",
+                status="confirmed",
+            )
+        )
+        target_id, parent_id = target.id, parent.id
+    merge_alias_employers(db, apply=True)
+    with db.session() as s:
+        target = s.get(Employer, target_id)
+        assert target.parent_id == parent_id
+        edges = list(s.scalars(select(Relationship).where(Relationship.child_id == target_id)))
+        assert len(edges) == 1 and edges[0].status == "confirmed"
+
+
+def test_merge_same_parent_relationships_keeps_audit_without_fk_error(tmp_path):
+    from sqlalchemy import select
+
+    from soe_radar.identity import merge_alias_employers
+    from soe_radar.models import Employer, Relationship
+
+    cfg = Settings.model_validate({"data_dir": str(tmp_path / "data")})
+    db = initialize(cfg)
+    with db.session() as s:
+        parent = Employer(name="示例母公司有限公司")
+        target = Employer(name="示例子公司有限公司")
+        duplicate = Employer(name="示例子公司有限公司[旧名有限公司]")
+        s.add_all([parent, target, duplicate])
+        s.flush()
+        target.parent_id = parent.id
+        duplicate.parent_id = parent.id
+        for child, url, quote in [
+            (target, "https://example.org/a", "证据甲"),
+            (duplicate, "https://example.org/b", "证据乙"),
+        ]:
+            s.add(
+                Relationship(
+                    parent_id=parent.id,
+                    child_id=child.id,
+                    relation_type="subsidiary",
+                    evidence_url=url,
+                    quote=quote,
+                    evidence_date="2026-01-01",
+                    status="confirmed",
+                )
+            )
+        target_id, parent_id = target.id, parent.id
+    merge_alias_employers(db, apply=True)
+    with db.session() as s:
+        target = s.get(Employer, target_id)
+        assert target.parent_id == parent_id
+        edges = list(s.scalars(select(Relationship).where(Relationship.child_id == target_id)))
+        assert len(edges) == 1 and edges[0].status == "confirmed"
+        assert {item["quote"] for item in edges[0].provenance} == {"证据甲", "证据乙"}
+
+
+def test_merge_different_confirmed_parents_keeps_one_and_marks_other_review(tmp_path):
+    from sqlalchemy import select
+
+    from soe_radar.identity import merge_alias_employers
+    from soe_radar.models import Employer, Relationship
+
+    cfg = Settings.model_validate({"data_dir": str(tmp_path / "data")})
+    db = initialize(cfg)
+    with db.session() as s:
+        first_parent = Employer(name="示例母公司甲有限公司")
+        second_parent = Employer(name="示例母公司乙有限公司")
+        target = Employer(name="示例子公司有限公司")
+        duplicate = Employer(name="示例子公司有限公司[旧名有限公司]")
+        s.add_all([first_parent, second_parent, target, duplicate])
+        s.flush()
+        target.parent_id = first_parent.id
+        duplicate.parent_id = second_parent.id
+        for parent, child in [(first_parent, target), (second_parent, duplicate)]:
+            s.add(
+                Relationship(
+                    parent_id=parent.id,
+                    child_id=child.id,
+                    relation_type="subsidiary",
+                    evidence_url="https://example.org/" + parent.name,
+                    quote="证据",
+                    evidence_date="2026-01-01",
+                    status="confirmed",
+                )
+            )
+        target_id, first_id = target.id, first_parent.id
+    merge_alias_employers(db, apply=True)
+    with db.session() as s:
+        target = s.get(Employer, target_id)
+        assert target.parent_id == first_id
+        edges = list(s.scalars(select(Relationship).where(Relationship.child_id == target_id)))
+        statuses = {edge.parent_id: edge.status for edge in edges}
+        assert statuses[first_id] == "confirmed"
+        assert any(status == "needs_review" for status in statuses.values())

@@ -289,6 +289,7 @@ def _relationship_rows(db):
             "关系证据URL": row.evidence_url,
             "原文片段": row.quote,
             "证据日期": row.evidence_date,
+            "证据记录": row.provenance,
             "状态": row.status,
             "创建时间": row.created_at,
         }

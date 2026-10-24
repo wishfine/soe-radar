@@ -46,14 +46,38 @@ def add_relationship(
             select(Relationship).where(Relationship.parent_id == parent.id, Relationship.child_id == child.id)
         )
         if not record:
-            record = Relationship(parent_id=parent.id, child_id=child.id)
+            record = Relationship(parent_id=parent.id, child_id=child.id, status=status)
             s.add(record)
+        evidence = {
+            "url": evidence_url,
+            "quote": quote.strip()[:5000],
+            "date": evidence_date,
+            "status": status,
+        }
+        provenance = list(record.provenance or [])
+        if not provenance and record.evidence_url:
+            provenance.append(
+                {
+                    "url": record.evidence_url,
+                    "quote": record.quote,
+                    "date": record.evidence_date,
+                    "status": record.status,
+                }
+            )
+        if evidence not in provenance:
+            provenance.append(evidence)
+        record.provenance = provenance
         record.relation_type = relation_type
-        record.evidence_url = evidence_url
-        record.quote = quote.strip()[:5000]
-        record.evidence_date = evidence_date
-        record.status = status
-        if status == "confirmed":
+        if status == "confirmed" and record.status != "confirmed":
+            record.evidence_url = evidence_url
+            record.quote = quote.strip()[:5000]
+            record.evidence_date = evidence_date
+        elif not record.evidence_url:
+            record.evidence_url = evidence_url
+            record.quote = quote.strip()[:5000]
+            record.evidence_date = evidence_date
+        record.status = "confirmed" if status == "confirmed" or record.status == "confirmed" else status
+        if record.status == "confirmed":
             child.parent_id = parent.id
         elif child.parent_id == parent.id:
             child.parent_id = None
