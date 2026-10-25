@@ -148,6 +148,41 @@ sources:
     api_fields: {title: title, url: id, published: publishTime, type: recruitType}
     api_url_template: https://zhaopin.csg.cn/#/notice-details?id={id}&recuitType=1
     api_next_param: pageNo
+  - id: cecep
+    name: 中国节能
+    employer: 中国节能环保集团有限公司
+    aliases: [中国节能环保集团, 中节能]
+    url: https://www.cecep.cn/cecep/zyly/rczp/jngs/A008014003001Gone1.html
+    domains: [cecep.cn]
+    industry: 环保
+  - id: chng
+    name: 中国华能
+    employer: 中国华能集团有限公司
+    aliases: [华能集团, 中国华能集团]
+    url: https://www.chng.com.cn/list_zpxx/-/article/cQQKaBtwslFy/list/23524.html
+    domains: [chng.com.cn]
+    industry: 能源电力
+  - id: crtamg
+    name: 中国融通
+    employer: 中国融通资产管理集团有限公司
+    aliases: [中国融通集团, 融通集团]
+    url: https://www.crtamg.com.cn/rlzy/rczp/
+    domains: [crtamg.com.cn]
+    industry: 综合
+  - id: casic
+    name: 中国航天科工
+    employer: 中国航天科工集团有限公司
+    aliases: [航天科工, 中国航天科工集团]
+    url: http://www.casic.com.cn/n27219851/index.html
+    domains: [casic.com.cn]
+    industry: 航空航天
+  - id: cetc
+    name: 中国电子科技
+    employer: 中国电子科技集团有限公司
+    aliases: [中国电科, 中电科]
+    url: http://www.cetc.com.cn/zgdk/1593022/1592495/index.html
+    domains: [cetc.com.cn]
+    industry: 电子信息
   - id: nmg-sasac
     name: 内蒙古国资委国企招聘
     url: https://gzw.nmg.gov.cn/zfxxgk/gqzp/

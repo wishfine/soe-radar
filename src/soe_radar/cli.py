@@ -282,6 +282,7 @@ def coverage_plan(
 @app.command("coverage-run")
 def coverage_run(
     batch: int = typer.Option(20, min=1, max=200, help="本次最多执行的任务数"),
+    action: str | None = typer.Option(None, help="只执行指定动作，如 verify_candidate"),
 ):
     """按任务队列执行，复用租约和退避；单任务失败不关闭企业。"""
     from .coverage_tasks import run_tasks
@@ -289,7 +290,7 @@ def coverage_run(
     cfg = load_settings()
     db = initialize(cfg)
     try:
-        output(asyncio.run(run_tasks(db, cfg, batch=batch)))
+        output(asyncio.run(run_tasks(db, cfg, batch=batch, action=action)))
     finally:
         db.engine.dispose()
 

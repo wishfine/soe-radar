@@ -58,6 +58,20 @@ def extract_page(url: str, html: str) -> Page:
         if target.startswith(("http://", "https://")):
             label = (a.get("title") or a.get_text(" ", strip=True)).strip()
             links.append((target, label))
+    # Some CMS list pages put a literal URL in an onclick handler. Read the string
+    # only; never execute JavaScript.
+    for node in soup.select("[onclick]"):
+        match = re.search(
+            r"window\.location\.href\s*=\s*['\"]([^'\"]+)['\"]",
+            node.get("onclick", ""),
+        )
+        if not match:
+            continue
+        target = urljoin(url, match.group(1))
+        title_node = node.select_one(".news-title,.title,h1,h2,h3")
+        label = (title_node or node).get_text(" ", strip=True)
+        if target.startswith(("http://", "https://")) and label:
+            links.append((target, label))
     heading = next(
         (node for node in soup.select("h1,h2.title,h2.article-title") if len(node.get_text(strip=True)) >= 6),
         None,

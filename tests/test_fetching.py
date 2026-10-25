@@ -312,3 +312,12 @@ def test_recruitment_banner_is_kept_but_qr_and_logo_are_ignored():
         '<article><img src="/images/logo.png" alt="网站标志"></article>',
     )
     assert not any(item["url"] for item in logo.attachments)
+
+
+def test_onclick_literal_links_are_read_without_executing_javascript():
+    page = extract_page(
+        "https://example.org/list",
+        '<div class="news-list-con" onclick="window.location.href=\'/detail/2027\'">'
+        '<p class="news-title">示例集团2027年校园招聘公告</p></div>',
+    )
+    assert ("https://example.org/detail/2027", "示例集团2027年校园招聘公告") in page.links

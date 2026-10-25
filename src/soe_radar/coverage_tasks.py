@@ -136,6 +136,12 @@ def plan_tasks(db, cfg: Settings, *, priorities=None, limit=None):
                     existing += 1
 
         memberships = _memberships(s)
+        official_sites = {}
+        for snapshot in s.scalars(select(RegistrySnapshot)):
+            for entry in snapshot.entries:
+                site = entry.get("official_url") or entry.get("profile_url") or ""
+                if site:
+                    official_sites.setdefault(entry["name"], site)
         source_employers = set()
         for source in cfg.sources:
             if source.employer:
@@ -148,7 +154,7 @@ def plan_tasks(db, cfg: Settings, *, priorities=None, limit=None):
             names = {employer.name, *(employer.aliases or [])}
             if names & source_employers:
                 continue
-            priority = "P1" if employer.parent_id else "P2"
+            priority = "P1" if employer.parent_id or employer.name in official_sites else "P2"
             if priorities and priority not in priorities:
                 continue
             if limit is not None and created >= limit:
@@ -295,11 +301,25 @@ async def _discover_registry(db, cfg, task):
         from bs4 import BeautifulSoup
 
         soup = BeautifulSoup(response.text, "html.parser")
+        exact_labels = {
+            "监管企业",
+            "监管企业名录",
+            "监管企业名单",
+            "企业名录",
+            "企业名单",
+            "所出资企业",
+            "出资企业",
+            "国企名录",
+            "企业目录",
+            "所属企业",
+        }
         links = []
         for anchor in soup.select("a[href]"):
             label = anchor.get_text(" ", strip=True)
-            if REGISTRY_SIGNAL.search(label):
-                links.append({"label": label, "url": urljoin(str(response.url), anchor.get("href", ""))})
+            clean = re.sub(r"\s+", "", label)
+            if clean not in exact_labels:
+                continue
+            links.append({"label": label, "url": urljoin(str(response.url), anchor.get("href", ""))})
         return {
             "status": "needs_review" if links else "blocked",
             "evidence": {
@@ -320,9 +340,32 @@ async def _discover_registry(db, cfg, task):
 async def _discover_entry(db, cfg, task):
     with db.session() as s:
         employer = s.get(Employer, task.scope_id)
+        start_url = ""
+        if employer:
+            names = {employer.name, *(employer.aliases or [])}
+            for snapshot in s.scalars(select(RegistrySnapshot)):
+                for entry in snapshot.entries:
+                    if entry.get("name") in names or entry.get("source_name") in names:
+                        start_url = entry.get("official_url") or entry.get("profile_url") or ""
+                        if start_url:
+                            break
+                if start_url:
+                    break
+            start_url = start_url or employer.proof_url
     if not employer:
         return {"status": "done", "next_action": "企业记录不存在，任务关闭"}
-    start_url = employer.proof_url
+    registry_urls = {url for spec in cfg.registries for url in (spec.url, spec.authority_url) if url}
+    if start_url in registry_urls:
+        return {
+            "status": "needs_review",
+            "evidence": {
+                "employer": employer.name,
+                "checked_url": start_url,
+                "reason": "仅有主管部门名录页，缺企业官网或官方档案页",
+                "checked_at": stamp(),
+            },
+            "next_action": "人工补充企业官网或官方招聘入口后再验证",
+        }
     if not start_url:
         return {"status": "needs_review", "next_action": "缺少企业官网或官方档案页，需人工补充"}
     fetcher = Fetcher(cfg)
@@ -476,7 +519,7 @@ async def execute_task(db, cfg, task):
     return {"status": "blocked", "error": "未知任务动作", "next_action": "人工检查任务配置"}
 
 
-async def run_tasks(db, cfg, *, batch=20, executor=None):
+async def run_tasks(db, cfg, *, batch=20, action=None, executor=None):
     from .models import uid
 
     owner = uid()
@@ -485,14 +528,10 @@ async def run_tasks(db, cfg, *, batch=20, executor=None):
     _reset_stale(db)
     now = stamp()
     with db.session() as s:
-        tasks = list(
-            s.scalars(
-                select(CoverageTask)
-                .where(CoverageTask.status == "pending", CoverageTask.due_at <= now)
-                .order_by(CoverageTask.priority, CoverageTask.created_at)
-                .limit(batch)
-            )
-        )
+        query = select(CoverageTask).where(CoverageTask.status == "pending", CoverageTask.due_at <= now)
+        if action:
+            query = query.where(CoverageTask.action == action)
+        tasks = list(s.scalars(query.order_by(CoverageTask.priority, CoverageTask.created_at).limit(batch)))
     results = []
     try:
         for task in tasks:
