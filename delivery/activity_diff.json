@@ -3,11 +3,11 @@
   "database": "data/radar.db",
   "counts": {
     "baseline_opportunities": 226,
-    "current_opportunities": 444,
-    "new_opportunity_ids": 218,
+    "current_opportunities": 455,
+    "new_opportunity_ids": 229,
     "removed_or_merged_ids": 0,
-    "new_campus": 65,
-    "new_campus_2027": 28
+    "new_campus": 70,
+    "new_campus_2027": 30
   },
   "new_campus_2027": [
     {
@@ -121,6 +121,16 @@
       "official_url": "https://www.chng.com.cn/detail_zpxx/-/article/YjJqG0pRRQU6/v/1324715.html"
     },
     {
+      "id": "05fdf4f408dc433694fbb42ecc922187",
+      "source_id": "sinopharm",
+      "title": "医路有为 耀启新程丨国药集团2027届校园招聘全面启动",
+      "cohorts": "[2027]",
+      "season": "",
+      "review_status": "pending",
+      "published_at": "2026-09-18",
+      "official_url": "https://www.sinopharm.com/2026-09/18/c_20734.htm"
+    },
+    {
       "id": "a16df2a221f045689adb42ad842e8d88",
       "source_id": "chng",
       "title": "华能西安热工院2027年校园招聘公告 西安热工研究院有限公司（以下简称西安热工院）作为中国华能集团有限公司所属的国家级能源电力技术研发机构和科技型企业，是国家战略科技力量的重要组成部分。1951年成立于首都北京，1965年迁址古都西安，西迁一甲子，初心绽荣光，在75年砥砺奋进的征途中，热工院人肩负着电力技术发展的责任与使命，承载着电力人的梦想与希望，也见证着祖国电力事业科技创新的追赶与超越。",
@@ -169,6 +179,16 @@
       "review_status": "pending",
       "published_at": "2026-09-24",
       "official_url": "https://www.chng.com.cn/detail_zpxx/-/article/YjJqG0pRRQU6/v/1325989.html"
+    },
+    {
+      "id": "0b180153094242d989bfb41e512a2917",
+      "source_id": "cmgb",
+      "title": "中国冶金地质总局2027届校园招聘公告",
+      "cohorts": "[2027]",
+      "season": "",
+      "review_status": "pending",
+      "published_at": "2026-09-25",
+      "official_url": "https://www.cmgb.com.cn/content/2026/09-25/7509048960149884928.html"
     },
     {
       "id": "8010728c9ddc4115b3d2196f2dc7605d",
@@ -294,9 +314,11 @@
   "new_campus_all_ids": [
     "0250ccb065f24c26bc371562ad396ef5",
     "045ba6a0f6cf4185a11b73e0595d1def",
+    "05fdf4f408dc433694fbb42ecc922187",
     "06db5c42e1f64ff98e94282e07352969",
     "08adb952197f4f5cb2fbbd6a9c8f8df6",
     "0a672b15496747e6aabd2674eb61597b",
+    "0b180153094242d989bfb41e512a2917",
     "0b4ecc35bc4f4ea98adc94afc49fdd45",
     "103fb322c92c4247ae1d89f2dbe23e96",
     "16c4e91c761d434086c5f6ee8be296ff",
@@ -313,6 +335,7 @@
     "5489e3dd16e746cab4da174871b59547",
     "58c0aa547b16451ea41a52caa0bac517",
     "5b2c2a5935254e8caaa6c83327968b2b",
+    "67251096f9a1474c874d1ffb603e28eb",
     "6759cc016edd4ce3ab84f12d0ad72159",
     "7132e67e47e045068a994d35243f5fad",
     "714343d421604391a40954b2aa1288c2",
@@ -327,6 +350,7 @@
     "929dd8cab3ba42eeb8041b773071ae4d",
     "94d91385e81644f3a4c2eea5fd8faa1a",
     "95f251ee65f44d7bbdbdbf4cee2dae26",
+    "99fa3147ac6847d2876cb000b12ad3c4",
     "a16df2a221f045689adb42ad842e8d88",
     "a241de8bbed44d3e9f4a1631f51cb6d5",
     "a4c2e2dcd11346c381f74468b0e8623a",
@@ -335,6 +359,7 @@
     "b26b5da4bf1e46d08d24ff34ce17300c",
     "b9c9e4a0cac540a08f9758a7e2ddf1cd",
     "bc950fb828fe483b978117548e1ad485",
+    "c0e1baca94004aa6adc8b1a88ff62a99",
     "c238e0df10bc4f019fd4097ce89189c7",
     "c406aafbb86f4d1db565e11af17763e0",
     "c895a120f61d4b639081af688cc56f21",

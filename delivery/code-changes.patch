@@ -1797,13 +1797,27 @@ index 0000000..6300e0f
 +            for row in s.scalars(query)
 +        ]
 diff --git a/src/soe_radar/defaults.yaml b/src/soe_radar/defaults.yaml
-index 58b5886..4f1d25d 100644
+index 58b5886..51fcc93 100644
 --- a/src/soe_radar/defaults.yaml
 +++ b/src/soe_radar/defaults.yaml
-@@ -148,6 +148,77 @@ sources:
+@@ -148,6 +148,91 @@ sources:
      api_fields: {title: title, url: id, published: publishTime, type: recruitType}
      api_url_template: https://zhaopin.csg.cn/#/notice-details?id={id}&recuitType=1
      api_next_param: pageNo
++  - id: sinopharm
++    name: 中国医药集团
++    employer: 中国医药集团有限公司
++    aliases: [国药集团, 中国医药集团]
++    url: https://www.sinopharm.com/recruitment.html
++    domains: [sinopharm.com]
++    industry: 医药
++  - id: cmgb
++    name: 中国冶金地质总局
++    employer: 中国冶金地质总局
++    aliases: [冶金地质总局]
++    url: https://www.cmgb.com.cn/category/zpxx.html
++    domains: [cmgb.com.cn]
++    industry: 地质勘查
 +  - id: cecep
 +    name: 中国节能
 +    employer: 中国节能环保集团有限公司
@@ -1878,7 +1892,7 @@ index 58b5886..4f1d25d 100644
  
  # 名录未成功读取时分母保持未知，不计为已覆盖。
  registries:
-@@ -163,31 +234,62 @@ registries:
+@@ -163,31 +248,62 @@ registries:
      category: central_mof
      url: https://zcgls.mof.gov.cn/zhuantilanmu/czblz/202108/t20210817_3745862.htm
      domains: [mof.gov.cn]
@@ -1947,7 +1961,7 @@ index 58b5886..4f1d25d 100644
    - id: local-03
      name: 河北地方国企（名录待接入）
      category: local
-@@ -195,17 +297,29 @@ registries:
+@@ -195,17 +311,29 @@ registries:
      authority_url: https://hbsa.hebei.gov.cn/
      authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
    - id: local-04
@@ -1981,7 +1995,7 @@ index 58b5886..4f1d25d 100644
    - id: local-06
      name: 辽宁地方国企（名录待接入）
      category: local
-@@ -247,17 +361,17 @@ registries:
+@@ -247,17 +375,17 @@ registries:
      category: local
      region: 安徽
    - id: local-13
@@ -2006,7 +2020,7 @@ index 58b5886..4f1d25d 100644
    - id: local-14
      name: 江西地方国企（名录待接入）
      category: local
-@@ -307,11 +421,17 @@ registries:
+@@ -307,11 +435,17 @@ registries:
      authority_url: https://gzw.gxzf.gov.cn/
      authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
    - id: local-21
@@ -2026,7 +2040,7 @@ index 58b5886..4f1d25d 100644
    - id: local-22
      name: 重庆地方国企（名录待接入）
      category: local
-@@ -331,11 +451,17 @@ registries:
+@@ -331,11 +465,17 @@ registries:
      authority_url: https://gzw.guizhou.gov.cn/
      authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
    - id: local-25
@@ -2046,7 +2060,7 @@ index 58b5886..4f1d25d 100644
    - id: local-26
      name: 西藏地方国企（名录待接入）
      category: local
-@@ -363,17 +489,17 @@ registries:
+@@ -363,17 +503,17 @@ registries:
      authority_url: https://gzw.nx.gov.cn/
      authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
    - id: local-31
