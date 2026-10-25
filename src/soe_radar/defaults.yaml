@@ -148,6 +148,20 @@ sources:
     api_fields: {title: title, url: id, published: publishTime, type: recruitType}
     api_url_template: https://zhaopin.csg.cn/#/notice-details?id={id}&recuitType=1
     api_next_param: pageNo
+  - id: sinopharm
+    name: 中国医药集团
+    employer: 中国医药集团有限公司
+    aliases: [国药集团, 中国医药集团]
+    url: https://www.sinopharm.com/recruitment.html
+    domains: [sinopharm.com]
+    industry: 医药
+  - id: cmgb
+    name: 中国冶金地质总局
+    employer: 中国冶金地质总局
+    aliases: [冶金地质总局]
+    url: https://www.cmgb.com.cn/category/zpxx.html
+    domains: [cmgb.com.cn]
+    industry: 地质勘查
   - id: cecep
     name: 中国节能
     employer: 中国节能环保集团有限公司
