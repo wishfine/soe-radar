@@ -257,3 +257,60 @@ class DiscoveryCall(Base):
     created_at: Mapped[str] = mapped_column(String, default=stamp)
     query: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, default="reserved")
+
+
+class CoverageTask(Base):
+    __tablename__ = "coverage_tasks"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
+    task_key: Mapped[str] = mapped_column(String, unique=True)
+    scope_type: Mapped[str] = mapped_column(String)
+    scope_id: Mapped[str] = mapped_column(String)
+    action: Mapped[str] = mapped_column(String)
+    priority: Mapped[str] = mapped_column(String, default="P2")
+    status: Mapped[str] = mapped_column(String, default="pending", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str] = mapped_column(String, default="")
+    next_action: Mapped[str] = mapped_column(String, default="")
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+    period_key: Mapped[str] = mapped_column(String, default="")
+    due_at: Mapped[str | None] = mapped_column(String)
+    last_run_at: Mapped[str | None] = mapped_column(String)
+    created_at: Mapped[str] = mapped_column(String, default=stamp)
+    updated_at: Mapped[str] = mapped_column(String, default=stamp)
+
+
+class SourceCandidate(Base):
+    __tablename__ = "source_candidates"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
+    candidate_key: Mapped[str] = mapped_column(String, unique=True)
+    employer_id: Mapped[str | None] = mapped_column(ForeignKey("employers.id"), index=True)
+    employer_name: Mapped[str] = mapped_column(String, default="")
+    url: Mapped[str] = mapped_column(String)
+    domain: Mapped[str] = mapped_column(String, default="")
+    entry_type: Mapped[str] = mapped_column(String, default="unknown")
+    discovery_method: Mapped[str] = mapped_column(String, default="")
+    identity_evidence: Mapped[str] = mapped_column(String, default="")
+    scope_employer_ids: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String, default="lead", index=True)
+    list_result: Mapped[dict] = mapped_column(JSON, default=dict)
+    detail_result: Mapped[dict] = mapped_column(JSON, default=dict)
+    attachment_result: Mapped[dict] = mapped_column(JSON, default=dict)
+    evidence_path: Mapped[str] = mapped_column(String, default="")
+    last_checked: Mapped[str | None] = mapped_column(String)
+    created_at: Mapped[str] = mapped_column(String, default=stamp)
+    updated_at: Mapped[str] = mapped_column(String, default=stamp)
+
+
+class SourceEmployerScope(Base):
+    __tablename__ = "source_employer_scopes"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
+    source_id: Mapped[str] = mapped_column(String, index=True)
+    employer_id: Mapped[str] = mapped_column(ForeignKey("employers.id"), index=True)
+    mode: Mapped[str] = mapped_column(String, default="group_umbrella")
+    evidence_url: Mapped[str] = mapped_column(String, default="")
+    quote: Mapped[str] = mapped_column(Text, default="")
+    cohorts: Mapped[list] = mapped_column(JSON, default=list)
+    batch_scope: Mapped[str] = mapped_column(String, default="")
+    status: Mapped[str] = mapped_column(String, default="needs_review")
+    verified_at: Mapped[str | None] = mapped_column(String)
+    __table_args__ = (UniqueConstraint("source_id", "employer_id", "mode", "batch_scope"),)

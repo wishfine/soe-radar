@@ -263,6 +263,105 @@ def coverage(cohort: int | None = None):
     db.engine.dispose()
 
 
+@app.command("coverage-plan")
+def coverage_plan(
+    priority: list[str] | None = typer.Option(None, "--priority", help="只规划指定优先级，可重复"),
+    limit: int | None = typer.Option(None, help="限制本次新增任务数"),
+):
+    """幂等生成名录、入口和候选验证任务；不发起网络请求。"""
+    from .coverage_tasks import plan_tasks
+
+    cfg = load_settings()
+    db = initialize(cfg)
+    try:
+        output(plan_tasks(db, cfg, priorities=priority, limit=limit))
+    finally:
+        db.engine.dispose()
+
+
+@app.command("coverage-run")
+def coverage_run(
+    batch: int = typer.Option(20, min=1, max=200, help="本次最多执行的任务数"),
+):
+    """按任务队列执行，复用租约和退避；单任务失败不关闭企业。"""
+    from .coverage_tasks import run_tasks
+
+    cfg = load_settings()
+    db = initialize(cfg)
+    try:
+        output(asyncio.run(run_tasks(db, cfg, batch=batch)))
+    finally:
+        db.engine.dispose()
+
+
+@app.command("coverage-tasks")
+def coverage_tasks(
+    status: str | None = typer.Option(None, help="pending/running/done/blocked/needs_review"),
+    limit: int = typer.Option(200, min=1, max=1000),
+):
+    """列出覆盖任务及下一步动作。"""
+    from .coverage_tasks import task_rows
+
+    cfg = load_settings()
+    db = initialize(cfg)
+    try:
+        output(task_rows(db, status=status, limit=limit))
+    finally:
+        db.engine.dispose()
+
+
+@app.command("source-candidates")
+def source_candidates(
+    status: str | None = typer.Option(None, help="lead/identity_checked/verified/blocked/rejected"),
+    limit: int = typer.Option(200, min=1, max=1000),
+):
+    """列出候选来源；候选默认不计入有效监测。"""
+    from .coverage_tasks import candidate_rows
+
+    cfg = load_settings()
+    db = initialize(cfg)
+    try:
+        output(candidate_rows(db, status=status, limit=limit))
+    finally:
+        db.engine.dispose()
+
+
+@app.command("source-scope-add")
+def source_scope_add(
+    source_id: str = typer.Option(..., help="已配置来源 id"),
+    employer: str = typer.Option(..., help="参与该来源的企业全称"),
+    mode: str = typer.Option("group_umbrella", help="group_umbrella/aggregator/independent"),
+    evidence_url: str = typer.Option(..., help="证明该企业由该来源覆盖的官方证据"),
+    quote: str = typer.Option(..., help="官方原文片段"),
+    cohorts: str = typer.Option("", help="届别，逗号分隔"),
+    batch_scope: str = typer.Option("", help="批次或适用范围"),
+    status: str = typer.Option("needs_review", help="needs_review/confirmed"),
+):
+    """登记共享入口与实际企业范围的映射，不自动继承整个集团。"""
+    from .coverage_tasks import add_source_scope
+
+    cfg = load_settings()
+    db = initialize(cfg)
+    try:
+        output(
+            {
+                "id": add_source_scope(
+                    db,
+                    source_id=source_id,
+                    employer_name=employer,
+                    mode=mode,
+                    evidence_url=evidence_url,
+                    quote=quote,
+                    cohorts=[int(x) for x in cohorts.split(",") if x.strip().isdigit()],
+                    batch_scope=batch_scope,
+                    status=status,
+                )
+            }
+        )
+    finally:
+        db.engine.dispose()
+
+
 @app.command("registry-refresh")
 def registry_refresh(ids: str | None = typer.Option(None, help="逗号分隔名录 id；默认刷新已配置入口")):
     """读取官方企业名录并保存版本；失败保留原底册，不删除企业。"""

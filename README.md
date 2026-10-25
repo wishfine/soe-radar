@@ -150,6 +150,19 @@ CSV 支持 `企业名称` / `公司名称` / `name` 列，可选 `官网地址` 
 
 南网采用官网前端使用的公开列表及正文接口，不登录、不读取令牌；真实可用情况与当前限制见 [本轮扩覆盖记录](docs/implementation/2026-10-23-coverage.md)。
 
+## 覆盖任务队列
+
+```bash
+uv run soe-radar coverage-plan
+uv run soe-radar coverage-run --batch 20
+uv run soe-radar coverage-tasks --status pending
+uv run soe-radar source-candidates --status lead
+uv run soe-radar source-scope-add --source-id sasac --employer 企业全称 \
+  --evidence-url https://官方域名/证据 --quote "原文片段" --cohorts 2027
+```
+
+任务队列复用现有租约、分页/详情上限、限速和退避策略，重复执行 `coverage-plan` 不会重复创建同一任务；不同届别使用独立周期键。候选来源默认是线索，不会自动计入已覆盖或自动启用；只有列表、详情、报名入口和附件验证通过后才进入人工启用审核。共享入口与实际企业范围用 `source_employer_scopes` 单独登记，不因集团入口自动覆盖全部子公司。
+
 ## 跨年度使用
 
 公司、招聘活动、批次、岗位、原文版本和截止声明分别保存。2026 年发布的 2027 届秋招与 2027 年发布的同届春招可以并存；一份公告支持多个届别。新年度不会清库，旧 URL 改成新一届内容会保留历史，去年已投不会把今年的活动标为已投。

@@ -13,7 +13,16 @@ from bs4 import BeautifulSoup
 from sqlalchemy import select
 
 from .extraction import PARSER_VERSION
-from .models import Employer, Opportunity, RegistrySnapshot, RegistryState, SourceState, stamp
+from .models import (
+    CoverageTask,
+    Employer,
+    Opportunity,
+    RegistrySnapshot,
+    RegistryState,
+    SourceCandidate,
+    SourceState,
+    stamp,
+)
 from .schemas import local_now
 from .urls import on_domains, public_url
 
@@ -838,6 +847,12 @@ def coverage_report(db, cfg, *, cohort=None):
                 )
             )
         )
+        task_counts = {}
+        for task in s.scalars(select(CoverageTask)):
+            task_counts[task.status] = task_counts.get(task.status, 0) + 1
+        candidate_counts = {}
+        for candidate in s.scalars(select(SourceCandidate)):
+            candidate_counts[candidate.status] = candidate_counts.get(candidate.status, 0) + 1
         memberships = {}
         membership_evidence = {}
         registries = []
@@ -963,6 +978,8 @@ def coverage_report(db, cfg, *, cohort=None):
             "bundled_registries": sum(
                 r["provenance"].get("acquisition") == "official_index_excerpt" for r in registries
             ),
+            "coverage_tasks": task_counts,
+            "source_candidates": candidate_counts,
         },
         "items": rows,
     }
