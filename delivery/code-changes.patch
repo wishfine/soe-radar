@@ -195,7 +195,7 @@ index 790dac1..93a5ced 100644
  
  
 diff --git a/src/soe_radar/coverage.py b/src/soe_radar/coverage.py
-index 19dba35..89b9a47 100644
+index 19dba35..02fe2e5 100644
 --- a/src/soe_radar/coverage.py
 +++ b/src/soe_radar/coverage.py
 @@ -3,25 +3,133 @@
@@ -342,11 +342,11 @@ index 19dba35..89b9a47 100644
 -                if not re.fullmatch(
 -                    r"[\u4e00-\u9fffA-Za-z0-9（）()·\[\]【】—－\-]{4,100}(?:公司|银行|总局)", name
 -                ):
+-                    continue
+-                if "集体" in name:
 +                name = name.lstrip("（(【[")
 +                if not _is_company(name):
                      continue
--                if "集体" in name:
--                    continue
 -                link = node if node.name == "a" else node.select_one("a[href]")
 -                target = ""
 -                if link:
@@ -698,16 +698,16 @@ index 19dba35..89b9a47 100644
 +            aliases = [value for value in entry.get("aliases", []) if value]
 +            source_name = entry.get("source_name", canonical)
 +            employer = by_name.get(canonical) or by_alias.get(canonical)
-+            if not employer:
-+                for alias in aliases:
-+                    employer = by_name.get(alias) or by_alias.get(alias)
-+                    if employer:
-+                        break
              if not employer:
 -                s.add(Employer(name=entry["name"], org_type="soe", proof_url=source_url, verified_at=stamp()))
 -            elif employer.org_type == "unknown":
 -                employer.org_type, employer.proof_url, employer.verified_at = "soe", source_url, stamp()
 -        state.active_snapshot_id = snapshot.id
++                for alias in aliases:
++                    employer = by_name.get(alias) or by_alias.get(alias)
++                    if employer:
++                        break
++            if not employer:
 +                employer = Employer(
 +                    name=canonical,
 +                    aliases=aliases,
@@ -779,12 +779,16 @@ index 19dba35..89b9a47 100644
  
  
  def registry_failure(db, registry_id, reason):
-@@ -189,6 +579,121 @@ def registry_failure(db, registry_id, reason):
+@@ -189,6 +579,180 @@ def registry_failure(db, registry_id, reason):
          state.last_error = reason[:300]
  
  
 +def repair_registry_snapshots(db, *, apply=False):
 +    """Recompute version digests and repair per-entry page bindings, idempotently."""
++
++    def normalized(value):
++        return "".join((value or "").split())
++
 +    plans = []
 +    with db.session() as s:
 +        snapshots = list(s.scalars(select(RegistrySnapshot)))
@@ -801,9 +805,9 @@ index 19dba35..89b9a47 100644
 +                    break
 +                raw = source.read_bytes()
 +                raw_pages.append({"url": page["url"], "raw": raw})
-+                page_text[page["sha256"]] = BeautifulSoup(
-+                    raw.decode("utf-8", "replace"), "html.parser"
-+                ).get_text(" ", strip=True)
++                page_text[page["sha256"]] = normalized(
++                    BeautifulSoup(raw.decode("utf-8", "replace"), "html.parser").get_text(" ")
++                )
 +            if not raw_pages:
 +                continue
 +            correct = snapshot_digest(raw_pages)
@@ -812,36 +816,92 @@ index 19dba35..89b9a47 100644
 +            repaired_entries = []
 +            binding_changes = 0
 +            unresolved = 0
++            changed = False
 +            for entry in snapshot.entries:
 +                item = dict(entry)
-+                page = path_by_sha.get(item.get("page_sha256")) or path_by_url.get(item.get("page_url"))
-+                if not page:
-+                    name = item.get("source_name") or item.get("name", "")
-+                    matches = [
-+                        candidate
-+                        for candidate in pages
-+                        if name
-+                        and name.replace(" ", "") in page_text.get(candidate["sha256"], "").replace(" ", "")
-+                    ]
-+                    page = matches[0] if len(matches) == 1 else None
++                name = normalized(item.get("source_name") or item.get("name", ""))
++                matches = [
++                    candidate
++                    for candidate in pages
++                    if name and name in page_text.get(candidate["sha256"], "")
++                ]
++                existing = path_by_sha.get(item.get("page_sha256")) or path_by_url.get(item.get("page_url"))
++                if existing and existing in matches:
++                    page = existing
++                    reason = ""
++                elif len(matches) == 1:
++                    page = matches[0]
++                    reason = ""
++                elif len(matches) > 1:
++                    page = None
++                    reason = "企业名称在多页出现，无法唯一定位证据页"
++                else:
++                    page = None
++                    reason = "所有保留原件均无法定位企业名称"
 +                if page:
-+                    if (
-+                        item.get("page_path") != page["path"]
-+                        or item.get("page_sha256") != page["sha256"]
-+                        or item.get("page_url") != page["url"]
-+                    ):
-+                        binding_changes += 1
++                    before = (
++                        item.get("page_url"),
++                        item.get("page_sha256"),
++                        item.get("page_path"),
++                        item.get("page_binding"),
++                        item.get("page_binding_reason"),
++                        item.get("page_binding_candidates"),
++                    )
 +                    item["page_path"] = page["path"]
 +                    item["page_sha256"] = page["sha256"]
 +                    item["page_url"] = page["url"]
 +                    item.pop("page_binding", None)
++                    item.pop("page_binding_reason", None)
++                    item.pop("page_binding_candidates", None)
++                    after = (
++                        item.get("page_url"),
++                        item.get("page_sha256"),
++                        item.get("page_path"),
++                        item.get("page_binding"),
++                        item.get("page_binding_reason"),
++                        item.get("page_binding_candidates"),
++                    )
++                    if before != after:
++                        binding_changes += 1
++                        changed = True
 +                else:
++                    old = {
++                        "url": item.get("page_url", ""),
++                        "sha256": item.get("page_sha256", ""),
++                        "path": item.get("page_path", ""),
++                    }
++                    candidates = list(item.get("page_binding_candidates") or [])
++                    if any(old.values()) and old not in candidates:
++                        candidates.append({**old, "reason": reason})
++                    before = (
++                        item.get("page_binding"),
++                        item.get("page_binding_reason"),
++                        item.get("page_binding_candidates"),
++                        item.get("page_url"),
++                        item.get("page_sha256"),
++                        item.get("page_path"),
++                    )
++                    item.pop("page_url", None)
++                    item.pop("page_sha256", None)
++                    item.pop("page_path", None)
 +                    item["page_binding"] = "needs_review"
++                    item["page_binding_reason"] = reason
++                    item["page_binding_candidates"] = candidates
++                    after = (
++                        item.get("page_binding"),
++                        item.get("page_binding_reason"),
++                        item.get("page_binding_candidates"),
++                        item.get("page_url"),
++                        item.get("page_sha256"),
++                        item.get("page_path"),
++                    )
 +                    unresolved += 1
++                    if before != after:
++                        changed = True
 +                repaired_entries.append(item)
 +            repaired = (snapshot.provenance or {}).get("digest_repaired_from")
 +            digest_changed = snapshot.digest != correct and not repaired
-+            if digest_changed or binding_changes or unresolved:
++            if digest_changed or changed:
 +                plans.append(
 +                    {
 +                        "id": snapshot.id,
@@ -885,13 +945,12 @@ index 19dba35..89b9a47 100644
 +                )
 +                snapshot.digest = correct
 +                snapshot.provenance = provenance
-+            if plan["binding_changes"] or plan["unresolved_entries"]:
-+                provenance = dict(snapshot.provenance or {})
-+                provenance["page_binding_repaired"] = plan["binding_changes"]
-+                if plan["unresolved_entries"]:
-+                    provenance["page_binding_unresolved"] = plan["unresolved_entries"]
-+                snapshot.entries = plan["entries"]
-+                snapshot.provenance = provenance
++            provenance = dict(snapshot.provenance or {})
++            provenance["page_binding_repaired"] = plan["binding_changes"]
++            if plan["unresolved_entries"]:
++                provenance["page_binding_unresolved"] = plan["unresolved_entries"]
++            snapshot.entries = plan["entries"]
++            snapshot.provenance = provenance
 +        return [
 +            {key: value for key, value in plan.items() if key not in ("entries", "pages", "old_provenance")}
 +            for plan in plans
@@ -901,7 +960,7 @@ index 19dba35..89b9a47 100644
  async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
      from .fetching import Fetcher
      from .models import uid
-@@ -206,18 +711,50 @@ async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
+@@ -206,18 +770,50 @@ async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
                  results.append({"registry_id": spec.id, "status": "missing_entry"})
                  continue
              db.acquire("registry", owner, seconds=600)
@@ -1200,10 +1259,10 @@ index 58b5886..c357b63 100644
      name: 广州市直接监管企业
 diff --git a/src/soe_radar/delivery.py b/src/soe_radar/delivery.py
 new file mode 100644
-index 0000000..699a420
+index 0000000..41024d3
 --- /dev/null
 +++ b/src/soe_radar/delivery.py
-@@ -0,0 +1,717 @@
+@@ -0,0 +1,735 @@
 +"""Auditable delivery exports built from the local database and current config."""
 +
 +from __future__ import annotations
@@ -1430,11 +1489,16 @@ index 0000000..699a420
 +            status = "当前"
 +        else:
 +            status = "待复核"
++        binding_review = entry.get("page_binding") == "needs_review"
 +        evidence_entry = page_evidence.get((spec.id, entry.get("page_sha256"))) if spec else None
-+        evidence_path = (
-+            evidence_entry[0] if evidence_entry else (evidence_paths.get(spec.id, "") if spec else "")
-+        )
-+        evidence_sha = entry.get("page_sha256") or (evidence_hashes.get(spec.id, "") if spec else "")
++        if binding_review:
++            evidence_path, evidence_sha, evidence_url = "", "", ""
++        else:
++            evidence_path = (
++                evidence_entry[0] if evidence_entry else (evidence_paths.get(spec.id, "") if spec else "")
++            )
++            evidence_sha = entry.get("page_sha256") or (evidence_hashes.get(spec.id, "") if spec else "")
++            evidence_url = entry.get("page_url", "") if entry else ""
 +        rows.append(
 +            {
 +                "id": employer.id,
@@ -1459,7 +1523,9 @@ index 0000000..699a420
 +                if snapshot
 +                else "",
 +                "来源名称": entry.get("source_name", employer.name) if entry else "",
-+                "证据页URL": entry.get("page_url", "") if entry else "",
++                "证据页URL": evidence_url,
++                "页绑定状态": "needs_review" if binding_review else ("verified" if evidence_path else ""),
++                "页绑定说明": entry.get("page_binding_reason", "") if binding_review else "",
 +                "来源原文片段": entry.get("quote", employer.name)
 +                if entry
 +                else ("来源配置声明的招聘主体" if source else relation.quote if relation else ""),
@@ -1701,6 +1767,17 @@ index 0000000..699a420
 +            or row["层级"] in ("集团/一级", "所属单位")
 +            or row["状态"].startswith("当前（关系")
 +        )
++        if row.get("页绑定状态") == "needs_review":
++            rows.append(
++                _gap(
++                    "证据页待复核",
++                    row["原始名称"],
++                    row.get("页绑定说明") or "无法唯一定位该企业对应的原件页。",
++                    row["实际访问时间"],
++                    "核对原始页面，重新定位企业名称与原文片段后再绑定证据页。",
++                    "中",
++                )
++            )
 +        if in_scope and not available:
 +            issue = "已建档但未配置可用官方招聘入口。"
 +            if matching:
@@ -2428,10 +2505,10 @@ index 27b72cc..c622044 100644
          )
          with self.db.session() as s:
 diff --git a/tests/test_coverage.py b/tests/test_coverage.py
-index 6b86c9b..698a3d3 100644
+index 6b86c9b..d85a1a7 100644
 --- a/tests/test_coverage.py
 +++ b/tests/test_coverage.py
-@@ -111,3 +111,530 @@ def test_orphan_parser_guesses_are_not_counted_as_companies(tmp_path):
+@@ -111,3 +111,624 @@ def test_orphan_parser_guesses_are_not_counted_as_companies(tmp_path):
      with db.session() as s:
          s.add(Employer(name="示例集团总行社会公开招聘"))
      assert "示例集团总行社会公开招聘" not in [r["name"] for r in coverage_report(db, cfg)["items"]]
@@ -2962,12 +3039,106 @@ index 6b86c9b..698a3d3 100644
 +        assert row.entries[0]["page_path"] == row.provenance["pages"][0]["path"]
 +        assert row.digest != "legacy-digest"
 +    assert repair_registry_snapshots(db, apply=False) == []
++
++
++def test_repair_verifies_enterprise_is_on_the_bound_page(tmp_path):
++    from soe_radar.coverage import repair_registry_snapshots, save_registry
++    from soe_radar.models import RegistrySnapshot
++
++    cfg = Settings.model_validate(
++        {
++            "data_dir": str(tmp_path / "data"),
++            "registries": [
++                {
++                    "id": "wrong-page",
++                    "name": "错页",
++                    "category": "local",
++                    "url": "https://example.gov.cn/list",
++                    "domains": ["example.gov.cn"],
++                }
++            ],
++        }
++    )
++    db = initialize(cfg)
++    spec = cfg.registries[0]
++    first = "<table><tr><td>1</td><td>示例一有限公司</td></tr></table>"
++    second = "<table><tr><td>2</td><td>示例二有限公司</td></tr></table>"
++    saved = save_registry(
++        db,
++        cfg,
++        spec,
++        first + second,
++        pages=[
++            {"url": spec.url, "raw": first.encode()},
++            {"url": spec.url + "?page=2", "raw": second.encode()},
++        ],
++    )
++    with db.session() as s:
++        row = s.get(RegistrySnapshot, saved["id"])
++        entries = [dict(entry) for entry in row.entries]
++        page = row.provenance["pages"][0]
++        bad = next(entry for entry in entries if entry["name"] == "示例二有限公司")
++        bad.update(page_url=page["url"], page_sha256=page["sha256"], page_path=page["path"])
++        row.entries = entries
++    repair_registry_snapshots(db, apply=True)
++    with db.session() as s:
++        row = s.get(RegistrySnapshot, saved["id"])
++        fixed = next(entry for entry in row.entries if entry["name"] == "示例二有限公司")
++        assert fixed["page_url"] == spec.url + "?page=2"
++        assert fixed["page_sha256"] == row.provenance["pages"][1]["sha256"]
++        assert "page_binding" not in fixed
++
++
++def test_repair_unresolved_entry_clears_verified_binding_and_is_idempotent(tmp_path):
++    from soe_radar.coverage import repair_registry_snapshots, save_registry
++    from soe_radar.models import RegistrySnapshot
++
++    cfg = Settings.model_validate(
++        {
++            "data_dir": str(tmp_path / "data"),
++            "registries": [
++                {
++                    "id": "unresolved",
++                    "name": "无法定位",
++                    "category": "local",
++                    "url": "https://example.gov.cn/list",
++                    "domains": ["example.gov.cn"],
++                }
++            ],
++        }
++    )
++    db = initialize(cfg)
++    saved = save_registry(
++        db,
++        cfg,
++        cfg.registries[0],
++        "<table><tr><td>1</td><td>示例一有限公司</td></tr></table>",
++    )
++    with db.session() as s:
++        row = s.get(RegistrySnapshot, saved["id"])
++        entries = [dict(entry) for entry in row.entries]
++        entries[0].update(
++            name="未能定位有限公司",
++            source_name="未能定位有限公司",
++            page_url="https://example.gov.cn/missing",
++            page_sha256="missing-hash",
++            page_path="registries/missing.html",
++        )
++        row.entries = entries
++    repair_registry_snapshots(db, apply=True)
++    with db.session() as s:
++        row = s.get(RegistrySnapshot, saved["id"])
++        entry = row.entries[0]
++        assert entry["page_binding"] == "needs_review"
++        assert "page_url" not in entry and "page_sha256" not in entry and "page_path" not in entry
++        assert entry["page_binding_candidates"][0]["path"] == "registries/missing.html"
++    assert repair_registry_snapshots(db, apply=False) == []
 diff --git a/tests/test_delivery.py b/tests/test_delivery.py
 new file mode 100644
-index 0000000..a61a0dd
+index 0000000..a933f76
 --- /dev/null
 +++ b/tests/test_delivery.py
-@@ -0,0 +1,187 @@
+@@ -0,0 +1,224 @@
 +import json
 +
 +import pytest
@@ -3155,6 +3326,43 @@ index 0000000..a61a0dd
 +    gaps = (tmp_path / "delivery" / "gaps.csv").read_text(encoding="utf-8-sig")
 +    assert "入口未找到" in gaps
 +    assert "示例子公司有限公司" in gaps
++
++
++def test_unresolved_page_binding_exports_blank_evidence_and_gap(tmp_path):
++    from soe_radar.coverage import repair_registry_snapshots
++    from soe_radar.models import Employer, RegistrySnapshot
++
++    cfg = delivery_settings(tmp_path)
++    db = initialize(cfg)
++    saved = save_registry(
++        db,
++        cfg,
++        cfg.registries[0],
++        "<table><tr><td>1</td><td>示例一有限公司</td></tr></table>",
++    )
++    with db.session() as s:
++        row = s.get(RegistrySnapshot, saved["id"])
++        entries = [dict(entry) for entry in row.entries]
++        entries[0].update(
++            name="未能定位有限公司",
++            source_name="未能定位有限公司",
++            page_url="https://example.gov.cn/missing",
++            page_sha256="missing-hash",
++            page_path="registries/missing.html",
++        )
++        row.entries = entries
++        s.add(Employer(name="未能定位有限公司", proof_url=cfg.registries[0].url))
++    repair_registry_snapshots(db, apply=True)
++    export_delivery(db, cfg, tmp_path / "delivery")
++    rows = {
++        row["原始名称"]: row
++        for row in map(json.loads, (tmp_path / "delivery" / "employers.jsonl").read_text().splitlines())
++    }
++    row = rows["未能定位有限公司"]
++    assert row["证据页URL"] == "" and row["证据路径"] == "" and row["证据SHA256"] == ""
++    assert row["页绑定状态"] == "needs_review"
++    gaps = (tmp_path / "delivery" / "gaps.csv").read_text(encoding="utf-8-sig")
++    assert "证据页待复核" in gaps
 diff --git a/tests/test_extraction.py b/tests/test_extraction.py
 index 4da6485..089113b 100644
 --- a/tests/test_extraction.py

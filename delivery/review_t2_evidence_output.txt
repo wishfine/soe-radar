@@ -1,0 +1,2 @@
+{"probe": "known_hash_but_wrong_enterprise_page", "expected": "https://example.gov.cn/list?page=2", "actual": "https://example.gov.cn/list?page=2", "passes": true}
+{"probe": "unresolved_binding_does_not_export_guessed_evidence", "expected": {"证据页URL": "", "证据路径": "", "证据SHA256": ""}, "actual": {"证据页URL": "", "证据路径": "", "证据SHA256": ""}, "passes": true}

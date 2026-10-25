@@ -7,7 +7,7 @@
 ## 1. 结论先行
 
 本轮把“全国覆盖”从**仅有随仓库摘录**推进到**12 个名录范围完成本轮官方页面读取/留证**，新增 6 个官方招聘栏目接入并实际跑通列表→详情（有附件的来源同时验证附件），净新增 12 条 2027 届真实校招线索。
-但**不能宣称全国覆盖完成**：22 个省级地区仍未取得官方名录，兵团、地市、区县和所属单位尚未下钻；已建档企业中 448 家仍没有招聘入口；5 个既有来源本轮仍访问失败。`registry_manifest.csv` 的“名单完整性”全部保持“未确认”。
+但**不能宣称全国覆盖完成**：22 个省级地区仍未取得官方名录，兵团、地市、区县和所属单位尚未下钻；已建档企业中 448 家仍没有招聘入口；手动检查时 5 个既有来源访问失败；最终导出前 10:05 定时同步另有多次网络失败，详见第 8 节。`registry_manifest.csv` 的“名单完整性”全部保持“未确认”。
 
 ## 2. 相对接手状态的净新增
 
@@ -69,6 +69,8 @@
 | no_recruitment（列表可读但本轮未发现当届校招） | 4 | cmcc、nmg-sasac、jl-sasac、sx-sasac |
 | partial（列表部分完成/有积压/详情失败） | 3 | boc、ncss、csg |
 | error（访问失败/动态壳/HTTP 412） | 5 | sh-sasac、sasac、cnpc、sinopec、telecom |
+
+> 最终导出时（10:53）数据库中的来源状态已因 10:05 定时同步失败而变化：success 2、no_recruitment 1、partial 3、error 11。上表是本轮手动检查时的结果，二者分别保留，不把定时同步失败解释为企业停止招聘。
 
 **新增并跑通列表→详情的 6 个官方招聘栏目**：
 
@@ -175,11 +177,12 @@
    - S2/S3：合并时迁移/校验 parent_id，冲突降为 needs_review；关系证据写入 provenance，先 flush 再删重复企业。
    - T1：显式 `status` 决定当前审核状态，支持 confirmed → needs_review → confirmed 往返。
    - T2：repair 重新赋值 entries 并独立检查页绑定，已修复数据可幂等复修。
+   - U1：页绑定必须能定位企业名称；无法定位时清除已验证证据字段，导出不回退第一页。
 
 测试与构建：
 
 ```text
-uv run pytest -q            → 153 passed, 1 warning
+uv run pytest -q            → 156 passed, 1 warning
 ruff check src tests        → All checks passed
 ruff format --check src tests → 45 files already formatted
 uv build                    → sdist + wheel 成功
@@ -255,9 +258,23 @@ repaired_page_binding_persists_after_commit: true
 
 个人库已执行 `registry-repair-snapshots --apply`；active 快照摘要未受影响，历史条目的页绑定已持久化修复。
 
+## 7.4 T2 跟进修复（U1）
+
+| 问题 | 修复 | 复现结果 |
+| --- | --- | --- |
+| U1 坏绑定被直接信任；待复核条目导出回退第一页 | repair 找到哈希/URL 对应页后，仍核对规范名/source_name 是否在该页出现；不成立则搜索其他页，只有唯一匹配才重绑。无法唯一定位时清除当前 page_url/page_sha256/page_path，旧值移入 page_binding_candidates，写 page_binding=needs_review 和原因。delivery 尊重该标记，证据页 URL/路径/SHA 全部留空，不回退第一页；新增 `页绑定状态`、`页绑定说明` 字段和“证据页待复核”缺口。 | 企业二被错绑第一页时修复到第二页；所有原件都无法定位时导出证据字段为空，并进入缺口 |
+
+复现：
+
+```text
+uv run python delivery/review_t2_evidence_repro.py
+known_hash_but_wrong_enterprise_page: true
+unresolved_binding_does_not_export_guessed_evidence: true
+```
+
 ## 8. 尚未解决的主要缺口
 
-详见 `gaps.csv`（503 行）与 `registry_manifest.csv`。优先级最高的：
+详见 `gaps.csv`（509 行）与 `registry_manifest.csv`。最终导出时定时同步失败使“访问受阻”从手动检查的 5 条增加到 11 条；这些失败保留为待重试缺口。优先级最高的：
 
 1. **22 个省级地区无官方名录**：需继续从主管部门官网导航、站内搜索、政府公开目录取得，并保存分页/附件证据。
 2. **兵团、地市、区县、所属单位未下钻**：省级集团名单不等于全部国企；集团一篇公告不等于子公司覆盖。

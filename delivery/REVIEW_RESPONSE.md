@@ -45,6 +45,21 @@ explicit_relationship_downgrade: true
 repaired_page_binding_persists_after_commit: true
 ```
 
+## T2 跟进（U1）
+
+- repair 不再仅凭 page_sha256/page_url 存在就信任旧绑定；必须能在该页定位规范名/source_name。若旧页不含该企业，继续搜索其他页，只有唯一匹配才重绑。
+- 无法唯一定位时，清除当前 `page_url/page_sha256/page_path`，旧值移入 `page_binding_candidates`，写 `page_binding=needs_review` 和原因。
+- delivery 尊重 `page_binding=needs_review`，证据页 URL/路径/SHA 全部留空，不回退第一页；新增 `页绑定状态`、`页绑定说明` 字段和“证据页待复核”缺口。
+- 个人库执行 repair 后 dry-run 为空；正常 active 快照未受影响。
+
+复现：
+
+```text
+uv run python delivery/review_t2_evidence_repro.py
+known_hash_but_wrong_enterprise_page: true
+unresolved_binding_does_not_export_guessed_evidence: true
+```
+
 ## 报告口径更正
 
 - 本轮净新增校招机会改为 **28 条**（55→83），其中 2027 届 12 条；`activity_diff.json` 可复核 ID 差集。此前“33 条”是未排除山西结果公示前的旧口径。
