@@ -1,22 +1,22 @@
 {
-  "generated_at": "2026-10-25T10:53:20.332754+00:00",
+  "generated_at": "2026-10-25T12:48:27.036357+00:00",
   "registry_rows": 40,
   "registry_rows_with_live_snapshot": 12,
   "registry_entries": 456,
   "employers": 458,
   "relationships_confirmed": 2,
-  "sources": 17,
-  "gaps": 509,
+  "sources": 22,
+  "gaps": 512,
   "gap_types": {
     "未建档": 28,
     "历史名单待更新": 2,
     "所属单位待查": 4,
-    "分页未完": 3,
+    "分页未完": 6,
     "访问受阻": 11,
     "当届未发现": 4,
-    "入口未找到": 448,
+    "入口未找到": 443,
     "关系待复核": 1,
-    "截止待补证": 8
+    "截止待补证": 13
   },
   "evidence_files": 58,
   "note": "全国完整名单、全部所属单位和招聘覆盖均未确认；本文件只汇总可复核的已知范围。"

@@ -60,6 +60,17 @@ known_hash_but_wrong_enterprise_page: true
 unresolved_binding_does_not_export_guessed_evidence: true
 ```
 
+## 2026-10-25 扩覆盖实做
+
+网络恢复后实际执行任务队列和候选验证，新增 5 个官方来源：中国航天科工、中国电子科技、中国华能、中国融通、中国节能。
+
+- 相比扩覆盖前备份：新增 21 条校招、16 条 2027 届。
+- 当前累计：22 个来源、120 条校招、64 条 2027 届、7 条已核验 2027 届。
+- 候选来源 132 条：41 verified、89 blocked、2 needs_review；未自动启用。
+- 任务队列 608 条：28 名录、448 入口、132 候选验证；394 pending、103 blocked、49 needs_review、62 done。
+- 新增 5 条 `source_employer_scopes`，只登记集团自身范围，不自动覆盖子公司。
+- 入口缺口从 448 降到 443。
+
 ## 报告口径更正
 
 - 本轮净新增校招机会改为 **28 条**（55→83），其中 2027 届 12 条；`activity_diff.json` 可复核 ID 差集。此前“33 条”是未排除山西结果公示前的旧口径。

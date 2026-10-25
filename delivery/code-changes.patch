@@ -38,7 +38,7 @@ index 328dc7b..3b28d9b 100644
  
  公司、招聘活动、批次、岗位、原文版本和截止声明分别保存。2026 年发布的 2027 届秋招与 2027 年发布的同届春招可以并存；一份公告支持多个届别。新年度不会清库，旧 URL 改成新一届内容会保留历史，去年已投不会把今年的活动标为已投。
 diff --git a/src/soe_radar/cli.py b/src/soe_radar/cli.py
-index 3e3e9ab..a0a7ea0 100644
+index 3e3e9ab..65c20b4 100644
 --- a/src/soe_radar/cli.py
 +++ b/src/soe_radar/cli.py
 @@ -190,6 +190,68 @@ def doctor(
@@ -110,7 +110,7 @@ index 3e3e9ab..a0a7ea0 100644
  @app.command("coverage")
  def coverage(cohort: int | None = None):
      """列出已知企业、未接入名录、网络受阻与当届活动覆盖。全国分母未知时不造覆盖率。"""
-@@ -201,6 +263,105 @@ def coverage(cohort: int | None = None):
+@@ -201,6 +263,106 @@ def coverage(cohort: int | None = None):
      db.engine.dispose()
  
  
@@ -133,6 +133,7 @@ index 3e3e9ab..a0a7ea0 100644
 +@app.command("coverage-run")
 +def coverage_run(
 +    batch: int = typer.Option(20, min=1, max=200, help="本次最多执行的任务数"),
++    action: str | None = typer.Option(None, help="只执行指定动作，如 verify_candidate"),
 +):
 +    """按任务队列执行，复用租约和退避；单任务失败不关闭企业。"""
 +    from .coverage_tasks import run_tasks
@@ -140,7 +141,7 @@ index 3e3e9ab..a0a7ea0 100644
 +    cfg = load_settings()
 +    db = initialize(cfg)
 +    try:
-+        output(asyncio.run(run_tasks(db, cfg, batch=batch)))
++        output(asyncio.run(run_tasks(db, cfg, batch=batch, action=action)))
 +    finally:
 +        db.engine.dispose()
 +
@@ -216,7 +217,7 @@ index 3e3e9ab..a0a7ea0 100644
  @app.command("registry-refresh")
  def registry_refresh(ids: str | None = typer.Option(None, help="逗号分隔名录 id；默认刷新已配置入口")):
      """读取官方企业名录并保存版本；失败保留原底册，不删除企业。"""
-@@ -215,6 +376,76 @@ def registry_refresh(ids: str | None = typer.Option(None, help="逗号分隔名
+@@ -215,6 +377,76 @@ def registry_refresh(ids: str | None = typer.Option(None, help="逗号分隔名
      db.engine.dispose()
  
  
@@ -1181,10 +1182,10 @@ index 19dba35..401eb3f 100644
      }
 diff --git a/src/soe_radar/coverage_tasks.py b/src/soe_radar/coverage_tasks.py
 new file mode 100644
-index 0000000..64eeaa9
+index 0000000..6300e0f
 --- /dev/null
 +++ b/src/soe_radar/coverage_tasks.py
-@@ -0,0 +1,571 @@
+@@ -0,0 +1,610 @@
 +"""Idempotent coverage task planning and bounded execution."""
 +
 +from __future__ import annotations
@@ -1323,6 +1324,12 @@ index 0000000..64eeaa9
 +                    existing += 1
 +
 +        memberships = _memberships(s)
++        official_sites = {}
++        for snapshot in s.scalars(select(RegistrySnapshot)):
++            for entry in snapshot.entries:
++                site = entry.get("official_url") or entry.get("profile_url") or ""
++                if site:
++                    official_sites.setdefault(entry["name"], site)
 +        source_employers = set()
 +        for source in cfg.sources:
 +            if source.employer:
@@ -1335,7 +1342,7 @@ index 0000000..64eeaa9
 +            names = {employer.name, *(employer.aliases or [])}
 +            if names & source_employers:
 +                continue
-+            priority = "P1" if employer.parent_id else "P2"
++            priority = "P1" if employer.parent_id or employer.name in official_sites else "P2"
 +            if priorities and priority not in priorities:
 +                continue
 +            if limit is not None and created >= limit:
@@ -1482,11 +1489,25 @@ index 0000000..64eeaa9
 +        from bs4 import BeautifulSoup
 +
 +        soup = BeautifulSoup(response.text, "html.parser")
++        exact_labels = {
++            "监管企业",
++            "监管企业名录",
++            "监管企业名单",
++            "企业名录",
++            "企业名单",
++            "所出资企业",
++            "出资企业",
++            "国企名录",
++            "企业目录",
++            "所属企业",
++        }
 +        links = []
 +        for anchor in soup.select("a[href]"):
 +            label = anchor.get_text(" ", strip=True)
-+            if REGISTRY_SIGNAL.search(label):
-+                links.append({"label": label, "url": urljoin(str(response.url), anchor.get("href", ""))})
++            clean = re.sub(r"\s+", "", label)
++            if clean not in exact_labels:
++                continue
++            links.append({"label": label, "url": urljoin(str(response.url), anchor.get("href", ""))})
 +        return {
 +            "status": "needs_review" if links else "blocked",
 +            "evidence": {
@@ -1507,9 +1528,32 @@ index 0000000..64eeaa9
 +async def _discover_entry(db, cfg, task):
 +    with db.session() as s:
 +        employer = s.get(Employer, task.scope_id)
++        start_url = ""
++        if employer:
++            names = {employer.name, *(employer.aliases or [])}
++            for snapshot in s.scalars(select(RegistrySnapshot)):
++                for entry in snapshot.entries:
++                    if entry.get("name") in names or entry.get("source_name") in names:
++                        start_url = entry.get("official_url") or entry.get("profile_url") or ""
++                        if start_url:
++                            break
++                if start_url:
++                    break
++            start_url = start_url or employer.proof_url
 +    if not employer:
 +        return {"status": "done", "next_action": "企业记录不存在，任务关闭"}
-+    start_url = employer.proof_url
++    registry_urls = {url for spec in cfg.registries for url in (spec.url, spec.authority_url) if url}
++    if start_url in registry_urls:
++        return {
++            "status": "needs_review",
++            "evidence": {
++                "employer": employer.name,
++                "checked_url": start_url,
++                "reason": "仅有主管部门名录页，缺企业官网或官方档案页",
++                "checked_at": stamp(),
++            },
++            "next_action": "人工补充企业官网或官方招聘入口后再验证",
++        }
 +    if not start_url:
 +        return {"status": "needs_review", "next_action": "缺少企业官网或官方档案页，需人工补充"}
 +    fetcher = Fetcher(cfg)
@@ -1663,7 +1707,7 @@ index 0000000..64eeaa9
 +    return {"status": "blocked", "error": "未知任务动作", "next_action": "人工检查任务配置"}
 +
 +
-+async def run_tasks(db, cfg, *, batch=20, executor=None):
++async def run_tasks(db, cfg, *, batch=20, action=None, executor=None):
 +    from .models import uid
 +
 +    owner = uid()
@@ -1672,14 +1716,10 @@ index 0000000..64eeaa9
 +    _reset_stale(db)
 +    now = stamp()
 +    with db.session() as s:
-+        tasks = list(
-+            s.scalars(
-+                select(CoverageTask)
-+                .where(CoverageTask.status == "pending", CoverageTask.due_at <= now)
-+                .order_by(CoverageTask.priority, CoverageTask.created_at)
-+                .limit(batch)
-+            )
-+        )
++        query = select(CoverageTask).where(CoverageTask.status == "pending", CoverageTask.due_at <= now)
++        if action:
++            query = query.where(CoverageTask.action == action)
++        tasks = list(s.scalars(query.order_by(CoverageTask.priority, CoverageTask.created_at).limit(batch)))
 +    results = []
 +    try:
 +        for task in tasks:
@@ -1757,13 +1797,48 @@ index 0000000..64eeaa9
 +            for row in s.scalars(query)
 +        ]
 diff --git a/src/soe_radar/defaults.yaml b/src/soe_radar/defaults.yaml
-index 58b5886..c357b63 100644
+index 58b5886..4f1d25d 100644
 --- a/src/soe_radar/defaults.yaml
 +++ b/src/soe_radar/defaults.yaml
-@@ -148,6 +148,42 @@ sources:
+@@ -148,6 +148,77 @@ sources:
      api_fields: {title: title, url: id, published: publishTime, type: recruitType}
      api_url_template: https://zhaopin.csg.cn/#/notice-details?id={id}&recuitType=1
      api_next_param: pageNo
++  - id: cecep
++    name: 中国节能
++    employer: 中国节能环保集团有限公司
++    aliases: [中国节能环保集团, 中节能]
++    url: https://www.cecep.cn/cecep/zyly/rczp/jngs/A008014003001Gone1.html
++    domains: [cecep.cn]
++    industry: 环保
++  - id: chng
++    name: 中国华能
++    employer: 中国华能集团有限公司
++    aliases: [华能集团, 中国华能集团]
++    url: https://www.chng.com.cn/list_zpxx/-/article/cQQKaBtwslFy/list/23524.html
++    domains: [chng.com.cn]
++    industry: 能源电力
++  - id: crtamg
++    name: 中国融通
++    employer: 中国融通资产管理集团有限公司
++    aliases: [中国融通集团, 融通集团]
++    url: https://www.crtamg.com.cn/rlzy/rczp/
++    domains: [crtamg.com.cn]
++    industry: 综合
++  - id: casic
++    name: 中国航天科工
++    employer: 中国航天科工集团有限公司
++    aliases: [航天科工, 中国航天科工集团]
++    url: http://www.casic.com.cn/n27219851/index.html
++    domains: [casic.com.cn]
++    industry: 航空航天
++  - id: cetc
++    name: 中国电子科技
++    employer: 中国电子科技集团有限公司
++    aliases: [中国电科, 中电科]
++    url: http://www.cetc.com.cn/zgdk/1593022/1592495/index.html
++    domains: [cetc.com.cn]
++    industry: 电子信息
 +  - id: nmg-sasac
 +    name: 内蒙古国资委国企招聘
 +    url: https://gzw.nmg.gov.cn/zfxxgk/gqzp/
@@ -1803,7 +1878,7 @@ index 58b5886..c357b63 100644
  
  # 名录未成功读取时分母保持未知，不计为已覆盖。
  registries:
-@@ -163,31 +199,62 @@ registries:
+@@ -163,31 +234,62 @@ registries:
      category: central_mof
      url: https://zcgls.mof.gov.cn/zhuantilanmu/czblz/202108/t20210817_3745862.htm
      domains: [mof.gov.cn]
@@ -1872,7 +1947,7 @@ index 58b5886..c357b63 100644
    - id: local-03
      name: 河北地方国企（名录待接入）
      category: local
-@@ -195,17 +262,29 @@ registries:
+@@ -195,17 +297,29 @@ registries:
      authority_url: https://hbsa.hebei.gov.cn/
      authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
    - id: local-04
@@ -1906,7 +1981,7 @@ index 58b5886..c357b63 100644
    - id: local-06
      name: 辽宁地方国企（名录待接入）
      category: local
-@@ -247,17 +326,17 @@ registries:
+@@ -247,17 +361,17 @@ registries:
      category: local
      region: 安徽
    - id: local-13
@@ -1931,7 +2006,7 @@ index 58b5886..c357b63 100644
    - id: local-14
      name: 江西地方国企（名录待接入）
      category: local
-@@ -307,11 +386,17 @@ registries:
+@@ -307,11 +421,17 @@ registries:
      authority_url: https://gzw.gxzf.gov.cn/
      authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
    - id: local-21
@@ -1951,7 +2026,7 @@ index 58b5886..c357b63 100644
    - id: local-22
      name: 重庆地方国企（名录待接入）
      category: local
-@@ -331,11 +416,17 @@ registries:
+@@ -331,11 +451,17 @@ registries:
      authority_url: https://gzw.guizhou.gov.cn/
      authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
    - id: local-25
@@ -1971,7 +2046,7 @@ index 58b5886..c357b63 100644
    - id: local-26
      name: 西藏地方国企（名录待接入）
      category: local
-@@ -363,17 +454,17 @@ registries:
+@@ -363,17 +489,17 @@ registries:
      authority_url: https://gzw.nx.gov.cn/
      authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
    - id: local-31
@@ -2756,10 +2831,31 @@ index b0d18cb..a87fd41 100644
      ):
          result.recruitment_type = "notice"
 diff --git a/src/soe_radar/fetching.py b/src/soe_radar/fetching.py
-index cc7b92f..0879077 100644
+index cc7b92f..435812b 100644
 --- a/src/soe_radar/fetching.py
 +++ b/src/soe_radar/fetching.py
-@@ -104,6 +104,7 @@ def extract_page(url: str, html: str) -> Page:
+@@ -58,6 +58,20 @@ def extract_page(url: str, html: str) -> Page:
+         if target.startswith(("http://", "https://")):
+             label = (a.get("title") or a.get_text(" ", strip=True)).strip()
+             links.append((target, label))
++    # Some CMS list pages put a literal URL in an onclick handler. Read the string
++    # only; never execute JavaScript.
++    for node in soup.select("[onclick]"):
++        match = re.search(
++            r"window\.location\.href\s*=\s*['\"]([^'\"]+)['\"]",
++            node.get("onclick", ""),
++        )
++        if not match:
++            continue
++        target = urljoin(url, match.group(1))
++        title_node = node.select_one(".news-title,.title,h1,h2,h3")
++        label = (title_node or node).get_text(" ", strip=True)
++        if target.startswith(("http://", "https://")) and label:
++            links.append((target, label))
+     heading = next(
+         (node for node in soup.select("h1,h2.title,h2.article-title") if len(node.get_text(strip=True)) >= 6),
+         None,
+@@ -104,6 +118,7 @@ def extract_page(url: str, html: str) -> Page:
          ".article-content",
          ".article_content",
          ".content_detail",
@@ -2767,7 +2863,7 @@ index cc7b92f..0879077 100644
          "#zoom",
          "#UCAP-CONTENT",
          "article",
-@@ -119,18 +120,55 @@ def extract_page(url: str, html: str) -> Page:
+@@ -119,18 +134,55 @@ def extract_page(url: str, html: str) -> Page:
      text = body.get_text("\n", strip=True)
      text = re.sub(r"[ \t\xa0]+", " ", text)
      text = re.sub(r"\n{3,}", "\n\n", text).strip()
@@ -2829,7 +2925,7 @@ index cc7b92f..0879077 100644
      return Page(
          url=url,
          title=title,
-@@ -496,7 +534,16 @@ class Fetcher:
+@@ -496,7 +548,16 @@ class Fetcher:
              raise FetchFailure("JSON 来源尚未配置 api_items_path 和 api_fields")
          rows = data
          for part in source.api_items_path.split("."):
@@ -2847,7 +2943,7 @@ index cc7b92f..0879077 100644
          if not isinstance(rows, list):
              raise FetchFailure("公开接口字段结构发生变化")
          title_key, url_key = source.api_fields.get("title", "title"), source.api_fields.get("url", "url")
-@@ -591,8 +638,9 @@ class Fetcher:
+@@ -591,8 +652,9 @@ class Fetcher:
                      item["status"] = "failed"
                      item["error"] = type(exc).__name__
              else:
@@ -4368,7 +4464,7 @@ index 4da6485..089113b 100644
 +    )
 +    assert result.recruitment_type == "notice"
 diff --git a/tests/test_fetching.py b/tests/test_fetching.py
-index 5418272..7d59dfa 100644
+index 5418272..41c27e2 100644
 --- a/tests/test_fetching.py
 +++ b/tests/test_fetching.py
 @@ -85,6 +85,24 @@ def test_body_images_are_not_silently_treated_as_parsed():
@@ -4396,7 +4492,7 @@ index 5418272..7d59dfa 100644
  def test_volatile_waf_parameters_do_not_create_different_announcements():
      from soe_radar.urls import canonical
  
-@@ -266,3 +284,31 @@ def test_spa_announcement_fragments_are_preserved_and_do_not_collapse_ids():
+@@ -266,3 +284,40 @@ def test_spa_announcement_fragments_are_preserved_and_do_not_collapse_ids():
      assert canonical(one) != canonical(two)
      assert canonical(one) == canonical(one.replace("/#/notice-details", "/notice-details"))
      assert canonical("https://example.org/notice#footer") == "https://example.org/notice"
@@ -4428,3 +4524,12 @@ index 5418272..7d59dfa 100644
 +        '<article><img src="/images/logo.png" alt="网站标志"></article>',
 +    )
 +    assert not any(item["url"] for item in logo.attachments)
++
++
++def test_onclick_literal_links_are_read_without_executing_javascript():
++    page = extract_page(
++        "https://example.org/list",
++        '<div class="news-list-con" onclick="window.location.href=\'/detail/2027\'">'
++        '<p class="news-title">示例集团2027年校园招聘公告</p></div>',
++    )
++    assert ("https://example.org/detail/2027", "示例集团2027年校园招聘公告") in page.links
