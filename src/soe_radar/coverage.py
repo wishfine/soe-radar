@@ -581,6 +581,10 @@ def registry_failure(db, registry_id, reason):
 
 def repair_registry_snapshots(db, *, apply=False):
     """Recompute version digests and repair per-entry page bindings, idempotently."""
+
+    def normalized(value):
+        return "".join((value or "").split())
+
     plans = []
     with db.session() as s:
         snapshots = list(s.scalars(select(RegistrySnapshot)))
@@ -597,9 +601,9 @@ def repair_registry_snapshots(db, *, apply=False):
                     break
                 raw = source.read_bytes()
                 raw_pages.append({"url": page["url"], "raw": raw})
-                page_text[page["sha256"]] = BeautifulSoup(
-                    raw.decode("utf-8", "replace"), "html.parser"
-                ).get_text(" ", strip=True)
+                page_text[page["sha256"]] = normalized(
+                    BeautifulSoup(raw.decode("utf-8", "replace"), "html.parser").get_text(" ")
+                )
             if not raw_pages:
                 continue
             correct = snapshot_digest(raw_pages)
@@ -608,36 +612,92 @@ def repair_registry_snapshots(db, *, apply=False):
             repaired_entries = []
             binding_changes = 0
             unresolved = 0
+            changed = False
             for entry in snapshot.entries:
                 item = dict(entry)
-                page = path_by_sha.get(item.get("page_sha256")) or path_by_url.get(item.get("page_url"))
-                if not page:
-                    name = item.get("source_name") or item.get("name", "")
-                    matches = [
-                        candidate
-                        for candidate in pages
-                        if name
-                        and name.replace(" ", "") in page_text.get(candidate["sha256"], "").replace(" ", "")
-                    ]
-                    page = matches[0] if len(matches) == 1 else None
+                name = normalized(item.get("source_name") or item.get("name", ""))
+                matches = [
+                    candidate
+                    for candidate in pages
+                    if name and name in page_text.get(candidate["sha256"], "")
+                ]
+                existing = path_by_sha.get(item.get("page_sha256")) or path_by_url.get(item.get("page_url"))
+                if existing and existing in matches:
+                    page = existing
+                    reason = ""
+                elif len(matches) == 1:
+                    page = matches[0]
+                    reason = ""
+                elif len(matches) > 1:
+                    page = None
+                    reason = "企业名称在多页出现，无法唯一定位证据页"
+                else:
+                    page = None
+                    reason = "所有保留原件均无法定位企业名称"
                 if page:
-                    if (
-                        item.get("page_path") != page["path"]
-                        or item.get("page_sha256") != page["sha256"]
-                        or item.get("page_url") != page["url"]
-                    ):
-                        binding_changes += 1
+                    before = (
+                        item.get("page_url"),
+                        item.get("page_sha256"),
+                        item.get("page_path"),
+                        item.get("page_binding"),
+                        item.get("page_binding_reason"),
+                        item.get("page_binding_candidates"),
+                    )
                     item["page_path"] = page["path"]
                     item["page_sha256"] = page["sha256"]
                     item["page_url"] = page["url"]
                     item.pop("page_binding", None)
+                    item.pop("page_binding_reason", None)
+                    item.pop("page_binding_candidates", None)
+                    after = (
+                        item.get("page_url"),
+                        item.get("page_sha256"),
+                        item.get("page_path"),
+                        item.get("page_binding"),
+                        item.get("page_binding_reason"),
+                        item.get("page_binding_candidates"),
+                    )
+                    if before != after:
+                        binding_changes += 1
+                        changed = True
                 else:
+                    old = {
+                        "url": item.get("page_url", ""),
+                        "sha256": item.get("page_sha256", ""),
+                        "path": item.get("page_path", ""),
+                    }
+                    candidates = list(item.get("page_binding_candidates") or [])
+                    if any(old.values()) and old not in candidates:
+                        candidates.append({**old, "reason": reason})
+                    before = (
+                        item.get("page_binding"),
+                        item.get("page_binding_reason"),
+                        item.get("page_binding_candidates"),
+                        item.get("page_url"),
+                        item.get("page_sha256"),
+                        item.get("page_path"),
+                    )
+                    item.pop("page_url", None)
+                    item.pop("page_sha256", None)
+                    item.pop("page_path", None)
                     item["page_binding"] = "needs_review"
+                    item["page_binding_reason"] = reason
+                    item["page_binding_candidates"] = candidates
+                    after = (
+                        item.get("page_binding"),
+                        item.get("page_binding_reason"),
+                        item.get("page_binding_candidates"),
+                        item.get("page_url"),
+                        item.get("page_sha256"),
+                        item.get("page_path"),
+                    )
                     unresolved += 1
+                    if before != after:
+                        changed = True
                 repaired_entries.append(item)
             repaired = (snapshot.provenance or {}).get("digest_repaired_from")
             digest_changed = snapshot.digest != correct and not repaired
-            if digest_changed or binding_changes or unresolved:
+            if digest_changed or changed:
                 plans.append(
                     {
                         "id": snapshot.id,
@@ -681,13 +741,12 @@ def repair_registry_snapshots(db, *, apply=False):
                 )
                 snapshot.digest = correct
                 snapshot.provenance = provenance
-            if plan["binding_changes"] or plan["unresolved_entries"]:
-                provenance = dict(snapshot.provenance or {})
-                provenance["page_binding_repaired"] = plan["binding_changes"]
-                if plan["unresolved_entries"]:
-                    provenance["page_binding_unresolved"] = plan["unresolved_entries"]
-                snapshot.entries = plan["entries"]
-                snapshot.provenance = provenance
+            provenance = dict(snapshot.provenance or {})
+            provenance["page_binding_repaired"] = plan["binding_changes"]
+            if plan["unresolved_entries"]:
+                provenance["page_binding_unresolved"] = plan["unresolved_entries"]
+            snapshot.entries = plan["entries"]
+            snapshot.provenance = provenance
         return [
             {key: value for key, value in plan.items() if key not in ("entries", "pages", "old_provenance")}
             for plan in plans

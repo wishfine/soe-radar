@@ -638,3 +638,97 @@ def test_snapshot_repair_persists_page_bindings_and_is_idempotent(tmp_path):
         assert row.entries[0]["page_path"] == row.provenance["pages"][0]["path"]
         assert row.digest != "legacy-digest"
     assert repair_registry_snapshots(db, apply=False) == []
+
+
+def test_repair_verifies_enterprise_is_on_the_bound_page(tmp_path):
+    from soe_radar.coverage import repair_registry_snapshots, save_registry
+    from soe_radar.models import RegistrySnapshot
+
+    cfg = Settings.model_validate(
+        {
+            "data_dir": str(tmp_path / "data"),
+            "registries": [
+                {
+                    "id": "wrong-page",
+                    "name": "错页",
+                    "category": "local",
+                    "url": "https://example.gov.cn/list",
+                    "domains": ["example.gov.cn"],
+                }
+            ],
+        }
+    )
+    db = initialize(cfg)
+    spec = cfg.registries[0]
+    first = "<table><tr><td>1</td><td>示例一有限公司</td></tr></table>"
+    second = "<table><tr><td>2</td><td>示例二有限公司</td></tr></table>"
+    saved = save_registry(
+        db,
+        cfg,
+        spec,
+        first + second,
+        pages=[
+            {"url": spec.url, "raw": first.encode()},
+            {"url": spec.url + "?page=2", "raw": second.encode()},
+        ],
+    )
+    with db.session() as s:
+        row = s.get(RegistrySnapshot, saved["id"])
+        entries = [dict(entry) for entry in row.entries]
+        page = row.provenance["pages"][0]
+        bad = next(entry for entry in entries if entry["name"] == "示例二有限公司")
+        bad.update(page_url=page["url"], page_sha256=page["sha256"], page_path=page["path"])
+        row.entries = entries
+    repair_registry_snapshots(db, apply=True)
+    with db.session() as s:
+        row = s.get(RegistrySnapshot, saved["id"])
+        fixed = next(entry for entry in row.entries if entry["name"] == "示例二有限公司")
+        assert fixed["page_url"] == spec.url + "?page=2"
+        assert fixed["page_sha256"] == row.provenance["pages"][1]["sha256"]
+        assert "page_binding" not in fixed
+
+
+def test_repair_unresolved_entry_clears_verified_binding_and_is_idempotent(tmp_path):
+    from soe_radar.coverage import repair_registry_snapshots, save_registry
+    from soe_radar.models import RegistrySnapshot
+
+    cfg = Settings.model_validate(
+        {
+            "data_dir": str(tmp_path / "data"),
+            "registries": [
+                {
+                    "id": "unresolved",
+                    "name": "无法定位",
+                    "category": "local",
+                    "url": "https://example.gov.cn/list",
+                    "domains": ["example.gov.cn"],
+                }
+            ],
+        }
+    )
+    db = initialize(cfg)
+    saved = save_registry(
+        db,
+        cfg,
+        cfg.registries[0],
+        "<table><tr><td>1</td><td>示例一有限公司</td></tr></table>",
+    )
+    with db.session() as s:
+        row = s.get(RegistrySnapshot, saved["id"])
+        entries = [dict(entry) for entry in row.entries]
+        entries[0].update(
+            name="未能定位有限公司",
+            source_name="未能定位有限公司",
+            page_url="https://example.gov.cn/missing",
+            page_sha256="missing-hash",
+            page_path="registries/missing.html",
+        )
+        row.entries = entries
+    repair_registry_snapshots(db, apply=True)
+    with db.session() as s:
+        row = s.get(RegistrySnapshot, saved["id"])
+        entry = row.entries[0]
+        assert entry["page_binding"] == "needs_review"
+        assert "page_url" not in entry and "page_sha256" not in entry and "page_path" not in entry
+        assert entry["page_binding_candidates"][0]["path"] == "registries/missing.html"
+    assert repair_registry_snapshots(db, apply=False) == []

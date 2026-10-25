@@ -224,11 +224,16 @@ def _employer_rows(db, cfg, active, evidence_paths, evidence_hashes, page_eviden
             status = "当前"
         else:
             status = "待复核"
+        binding_review = entry.get("page_binding") == "needs_review"
         evidence_entry = page_evidence.get((spec.id, entry.get("page_sha256"))) if spec else None
-        evidence_path = (
-            evidence_entry[0] if evidence_entry else (evidence_paths.get(spec.id, "") if spec else "")
-        )
-        evidence_sha = entry.get("page_sha256") or (evidence_hashes.get(spec.id, "") if spec else "")
+        if binding_review:
+            evidence_path, evidence_sha, evidence_url = "", "", ""
+        else:
+            evidence_path = (
+                evidence_entry[0] if evidence_entry else (evidence_paths.get(spec.id, "") if spec else "")
+            )
+            evidence_sha = entry.get("page_sha256") or (evidence_hashes.get(spec.id, "") if spec else "")
+            evidence_url = entry.get("page_url", "") if entry else ""
         rows.append(
             {
                 "id": employer.id,
@@ -253,7 +258,9 @@ def _employer_rows(db, cfg, active, evidence_paths, evidence_hashes, page_eviden
                 if snapshot
                 else "",
                 "来源名称": entry.get("source_name", employer.name) if entry else "",
-                "证据页URL": entry.get("page_url", "") if entry else "",
+                "证据页URL": evidence_url,
+                "页绑定状态": "needs_review" if binding_review else ("verified" if evidence_path else ""),
+                "页绑定说明": entry.get("page_binding_reason", "") if binding_review else "",
                 "来源原文片段": entry.get("quote", employer.name)
                 if entry
                 else ("来源配置声明的招聘主体" if source else relation.quote if relation else ""),
@@ -495,6 +502,17 @@ def _gap_rows(db, cfg, active, employer_rows):
             or row["层级"] in ("集团/一级", "所属单位")
             or row["状态"].startswith("当前（关系")
         )
+        if row.get("页绑定状态") == "needs_review":
+            rows.append(
+                _gap(
+                    "证据页待复核",
+                    row["原始名称"],
+                    row.get("页绑定说明") or "无法唯一定位该企业对应的原件页。",
+                    row["实际访问时间"],
+                    "核对原始页面，重新定位企业名称与原文片段后再绑定证据页。",
+                    "中",
+                )
+            )
         if in_scope and not available:
             issue = "已建档但未配置可用官方招聘入口。"
             if matching:

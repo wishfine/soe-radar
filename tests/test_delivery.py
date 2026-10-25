@@ -185,3 +185,40 @@ def test_needs_review_relationship_is_not_in_confirmed_file_and_confirmed_child_
     gaps = (tmp_path / "delivery" / "gaps.csv").read_text(encoding="utf-8-sig")
     assert "入口未找到" in gaps
     assert "示例子公司有限公司" in gaps
+
+
+def test_unresolved_page_binding_exports_blank_evidence_and_gap(tmp_path):
+    from soe_radar.coverage import repair_registry_snapshots
+    from soe_radar.models import Employer, RegistrySnapshot
+
+    cfg = delivery_settings(tmp_path)
+    db = initialize(cfg)
+    saved = save_registry(
+        db,
+        cfg,
+        cfg.registries[0],
+        "<table><tr><td>1</td><td>示例一有限公司</td></tr></table>",
+    )
+    with db.session() as s:
+        row = s.get(RegistrySnapshot, saved["id"])
+        entries = [dict(entry) for entry in row.entries]
+        entries[0].update(
+            name="未能定位有限公司",
+            source_name="未能定位有限公司",
+            page_url="https://example.gov.cn/missing",
+            page_sha256="missing-hash",
+            page_path="registries/missing.html",
+        )
+        row.entries = entries
+        s.add(Employer(name="未能定位有限公司", proof_url=cfg.registries[0].url))
+    repair_registry_snapshots(db, apply=True)
+    export_delivery(db, cfg, tmp_path / "delivery")
+    rows = {
+        row["原始名称"]: row
+        for row in map(json.loads, (tmp_path / "delivery" / "employers.jsonl").read_text().splitlines())
+    }
+    row = rows["未能定位有限公司"]
+    assert row["证据页URL"] == "" and row["证据路径"] == "" and row["证据SHA256"] == ""
+    assert row["页绑定状态"] == "needs_review"
+    gaps = (tmp_path / "delivery" / "gaps.csv").read_text(encoding="utf-8-sig")
+    assert "证据页待复核" in gaps
