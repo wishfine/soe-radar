@@ -182,9 +182,9 @@
 测试与构建：
 
 ```text
-uv run pytest -q            → 156 passed, 1 warning
+uv run pytest -q            → 160 passed, 1 warning
 ruff check src tests        → All checks passed
-ruff format --check src tests → 45 files already formatted
+ruff format --check src tests → 48 files already formatted
 uv build                    → sdist + wheel 成功
 ```
 
@@ -333,7 +333,20 @@ uv build
   注意：CSV 导入默认是人工确认导入，不会自动把 `employers.jsonl` 的状态、历史或关系写回；关系必须用 `relationship-add` 单独录入。
 - `relationships.jsonl` 只包含 `status=confirmed` 的关系；没有原文片段/日期的母公司链接只进入 `gaps.csv` 的“关系待复核”，不混入已确认关系。
 
-## 11. 合规与未做事项
+## 11. 下一阶段：覆盖任务队列（本轮增量）
+
+本轮按复审约束新增 `coverage_tasks`、`source_candidates`、`source_employer_scopes`，先把“怎么查”变成可恢复队列；**没有把任务数当作覆盖成绩**。
+
+- 任务规划：`coverage-plan` 生成 476 个任务（28 个名录任务、448 个入口任务）；重复执行返回 `created=0`。
+- 任务执行：`coverage-run --batch N` 复用租约、限速和退避；单任务失败保留进度，中断的 running 任务会在下次运行恢复为 pending。
+- 小闭环：离线执行 3 个无主管部门入口的 P0 任务，状态均为 `needs_review`，下一步为人工补充入口；当前网络不可用，未发起新的真实采集，因此本轮不报告新增覆盖。
+- 候选来源：默认 `lead`，不计入有效监测；必须经过列表、详情、报名入口和附件验证后才可能进入人工启用审核。
+- 共享入口：`source_employer_scopes` 单独记录模式、参与企业、届别/批次、官方证据和复查时间；集团入口不自动覆盖全部子公司。
+- 入口、活动、截止分开：候选验证只证明入口/列表/详情可读，不自动生成当届校招或明确截止。
+
+当前队列摘要：`delivery/coverage_tasks_summary.json`；逐任务清单：`delivery/coverage_tasks.csv`。
+
+## 12. 合规与未做事项
 
 - `allow_paid=false`，月度预算 0；本轮**没有调用任何模型**，模型调用记录仍为 2 条历史记录。
 - 未读取、保存或转发登录令牌、Cookie、个人配置、个人数据库到仓库；`data/`、`backups/`、`config/local.yaml` 仍在 `.gitignore`。

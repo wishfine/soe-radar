@@ -1,0 +1,17 @@
+{
+  "total": 476,
+  "by_status": {
+    "needs_review": 3,
+    "pending": 473
+  },
+  "by_action": {
+    "discover_registry": 28,
+    "discover_entry": 448
+  },
+  "by_priority": {
+    "P0": 3,
+    "P1": 25,
+    "P2": 448
+  },
+  "note": "任务只表示待查/待验证，不表示覆盖完成；候选来源默认不计入有效监测。"
+}

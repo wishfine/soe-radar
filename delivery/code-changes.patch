@@ -1,5 +1,5 @@
 diff --git a/README.md b/README.md
-index 328dc7b..be4e4c4 100644
+index 328dc7b..3b28d9b 100644
 --- a/README.md
 +++ b/README.md
 @@ -121,6 +121,14 @@ employers:
@@ -17,8 +17,28 @@ index 328dc7b..be4e4c4 100644
  ```
  
  `coverage` 的默认届别为运行时下一届，也可明确指定；名单、招聘季和原文年份不会被自动改写。配置 `registries` 按 `id` 合并，空列表关闭名录刷新。名录读取成功每七天复查、失败每日重试，失败保留已有名单和历史。网页“全国覆盖”列出未知分母和未接入地区，并支持导入已核对的官方 CSV：
+@@ -142,6 +150,19 @@ CSV 支持 `企业名称` / `公司名称` / `name` 列，可选 `官网地址`
+ 
+ 南网采用官网前端使用的公开列表及正文接口，不登录、不读取令牌；真实可用情况与当前限制见 [本轮扩覆盖记录](docs/implementation/2026-10-23-coverage.md)。
+ 
++## 覆盖任务队列
++
++```bash
++uv run soe-radar coverage-plan
++uv run soe-radar coverage-run --batch 20
++uv run soe-radar coverage-tasks --status pending
++uv run soe-radar source-candidates --status lead
++uv run soe-radar source-scope-add --source-id sasac --employer 企业全称 \
++  --evidence-url https://官方域名/证据 --quote "原文片段" --cohorts 2027
++```
++
++任务队列复用现有租约、分页/详情上限、限速和退避策略，重复执行 `coverage-plan` 不会重复创建同一任务；不同届别使用独立周期键。候选来源默认是线索，不会自动计入已覆盖或自动启用；只有列表、详情、报名入口和附件验证通过后才进入人工启用审核。共享入口与实际企业范围用 `source_employer_scopes` 单独登记，不因集团入口自动覆盖全部子公司。
++
+ ## 跨年度使用
+ 
+ 公司、招聘活动、批次、岗位、原文版本和截止声明分别保存。2026 年发布的 2027 届秋招与 2027 年发布的同届春招可以并存；一份公告支持多个届别。新年度不会清库，旧 URL 改成新一届内容会保留历史，去年已投不会把今年的活动标为已投。
 diff --git a/src/soe_radar/cli.py b/src/soe_radar/cli.py
-index 3e3e9ab..6c1f124 100644
+index 3e3e9ab..a0a7ea0 100644
 --- a/src/soe_radar/cli.py
 +++ b/src/soe_radar/cli.py
 @@ -190,6 +190,68 @@ def doctor(
@@ -90,7 +110,113 @@ index 3e3e9ab..6c1f124 100644
  @app.command("coverage")
  def coverage(cohort: int | None = None):
      """列出已知企业、未接入名录、网络受阻与当届活动覆盖。全国分母未知时不造覆盖率。"""
-@@ -215,6 +277,76 @@ def registry_refresh(ids: str | None = typer.Option(None, help="逗号分隔名
+@@ -201,6 +263,105 @@ def coverage(cohort: int | None = None):
+     db.engine.dispose()
+ 
+ 
++@app.command("coverage-plan")
++def coverage_plan(
++    priority: list[str] | None = typer.Option(None, "--priority", help="只规划指定优先级，可重复"),
++    limit: int | None = typer.Option(None, help="限制本次新增任务数"),
++):
++    """幂等生成名录、入口和候选验证任务；不发起网络请求。"""
++    from .coverage_tasks import plan_tasks
++
++    cfg = load_settings()
++    db = initialize(cfg)
++    try:
++        output(plan_tasks(db, cfg, priorities=priority, limit=limit))
++    finally:
++        db.engine.dispose()
++
++
++@app.command("coverage-run")
++def coverage_run(
++    batch: int = typer.Option(20, min=1, max=200, help="本次最多执行的任务数"),
++):
++    """按任务队列执行，复用租约和退避；单任务失败不关闭企业。"""
++    from .coverage_tasks import run_tasks
++
++    cfg = load_settings()
++    db = initialize(cfg)
++    try:
++        output(asyncio.run(run_tasks(db, cfg, batch=batch)))
++    finally:
++        db.engine.dispose()
++
++
++@app.command("coverage-tasks")
++def coverage_tasks(
++    status: str | None = typer.Option(None, help="pending/running/done/blocked/needs_review"),
++    limit: int = typer.Option(200, min=1, max=1000),
++):
++    """列出覆盖任务及下一步动作。"""
++    from .coverage_tasks import task_rows
++
++    cfg = load_settings()
++    db = initialize(cfg)
++    try:
++        output(task_rows(db, status=status, limit=limit))
++    finally:
++        db.engine.dispose()
++
++
++@app.command("source-candidates")
++def source_candidates(
++    status: str | None = typer.Option(None, help="lead/identity_checked/verified/blocked/rejected"),
++    limit: int = typer.Option(200, min=1, max=1000),
++):
++    """列出候选来源；候选默认不计入有效监测。"""
++    from .coverage_tasks import candidate_rows
++
++    cfg = load_settings()
++    db = initialize(cfg)
++    try:
++        output(candidate_rows(db, status=status, limit=limit))
++    finally:
++        db.engine.dispose()
++
++
++@app.command("source-scope-add")
++def source_scope_add(
++    source_id: str = typer.Option(..., help="已配置来源 id"),
++    employer: str = typer.Option(..., help="参与该来源的企业全称"),
++    mode: str = typer.Option("group_umbrella", help="group_umbrella/aggregator/independent"),
++    evidence_url: str = typer.Option(..., help="证明该企业由该来源覆盖的官方证据"),
++    quote: str = typer.Option(..., help="官方原文片段"),
++    cohorts: str = typer.Option("", help="届别，逗号分隔"),
++    batch_scope: str = typer.Option("", help="批次或适用范围"),
++    status: str = typer.Option("needs_review", help="needs_review/confirmed"),
++):
++    """登记共享入口与实际企业范围的映射，不自动继承整个集团。"""
++    from .coverage_tasks import add_source_scope
++
++    cfg = load_settings()
++    db = initialize(cfg)
++    try:
++        output(
++            {
++                "id": add_source_scope(
++                    db,
++                    source_id=source_id,
++                    employer_name=employer,
++                    mode=mode,
++                    evidence_url=evidence_url,
++                    quote=quote,
++                    cohorts=[int(x) for x in cohorts.split(",") if x.strip().isdigit()],
++                    batch_scope=batch_scope,
++                    status=status,
++                )
++            }
++        )
++    finally:
++        db.engine.dispose()
++
++
+ @app.command("registry-refresh")
+ def registry_refresh(ids: str | None = typer.Option(None, help="逗号分隔名录 id；默认刷新已配置入口")):
+     """读取官方企业名录并保存版本；失败保留原底册，不删除企业。"""
+@@ -215,6 +376,76 @@ def registry_refresh(ids: str | None = typer.Option(None, help="逗号分隔名
      db.engine.dispose()
  
  
@@ -195,10 +321,10 @@ index 790dac1..93a5ced 100644
  
  
 diff --git a/src/soe_radar/coverage.py b/src/soe_radar/coverage.py
-index 19dba35..02fe2e5 100644
+index 19dba35..401eb3f 100644
 --- a/src/soe_radar/coverage.py
 +++ b/src/soe_radar/coverage.py
-@@ -3,25 +3,133 @@
+@@ -3,25 +3,142 @@
  from __future__ import annotations
  
  import hashlib
@@ -212,8 +338,18 @@ index 19dba35..02fe2e5 100644
  from bs4 import BeautifulSoup
  from sqlalchemy import select
  
+-from .models import Employer, Opportunity, RegistrySnapshot, RegistryState, SourceState, stamp
 +from .extraction import PARSER_VERSION
- from .models import Employer, Opportunity, RegistrySnapshot, RegistryState, SourceState, stamp
++from .models import (
++    CoverageTask,
++    Employer,
++    Opportunity,
++    RegistrySnapshot,
++    RegistryState,
++    SourceCandidate,
++    SourceState,
++    stamp,
++)
  from .schemas import local_now
  from .urls import on_domains, public_url
  
@@ -335,7 +471,7 @@ index 19dba35..02fe2e5 100644
              values = (
                  [node.get_text(" ", strip=True)]
                  if spec.adapter == "links"
-@@ -29,52 +137,179 @@ def parse_registry(html, spec):
+@@ -29,52 +146,179 @@ def parse_registry(html, spec):
              )
              for value in values:
                  name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", value).strip()
@@ -551,7 +687,7 @@ index 19dba35..02fe2e5 100644
  
  
  def import_registry_csv(db, cfg, spec, content, proof_url, *, confirmed=False):
-@@ -131,51 +366,206 @@ def import_registry_csv(db, cfg, spec, content, proof_url, *, confirmed=False):
+@@ -131,51 +375,206 @@ def import_registry_csv(db, cfg, spec, content, proof_url, *, confirmed=False):
      )
  
  
@@ -779,7 +915,7 @@ index 19dba35..02fe2e5 100644
  
  
  def registry_failure(db, registry_id, reason):
-@@ -189,6 +579,180 @@ def registry_failure(db, registry_id, reason):
+@@ -189,6 +588,180 @@ def registry_failure(db, registry_id, reason):
          state.last_error = reason[:300]
  
  
@@ -960,7 +1096,7 @@ index 19dba35..02fe2e5 100644
  async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
      from .fetching import Fetcher
      from .models import uid
-@@ -206,18 +770,50 @@ async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
+@@ -206,18 +779,50 @@ async def refresh_registries(db, cfg, ids=None, *, fetcher=None):
                  results.append({"registry_id": spec.id, "status": "missing_entry"})
                  continue
              db.acquire("registry", owner, seconds=600)
@@ -1021,6 +1157,605 @@ index 19dba35..02fe2e5 100644
          return {"registries": results, "network_attempts": fetcher.network_attempts[-100:]}
      finally:
          if own_fetcher:
+@@ -242,6 +847,12 @@ def coverage_report(db, cfg, *, cohort=None):
+                 )
+             )
+         )
++        task_counts = {}
++        for task in s.scalars(select(CoverageTask)):
++            task_counts[task.status] = task_counts.get(task.status, 0) + 1
++        candidate_counts = {}
++        for candidate in s.scalars(select(SourceCandidate)):
++            candidate_counts[candidate.status] = candidate_counts.get(candidate.status, 0) + 1
+         memberships = {}
+         membership_evidence = {}
+         registries = []
+@@ -367,6 +978,8 @@ def coverage_report(db, cfg, *, cohort=None):
+             "bundled_registries": sum(
+                 r["provenance"].get("acquisition") == "official_index_excerpt" for r in registries
+             ),
++            "coverage_tasks": task_counts,
++            "source_candidates": candidate_counts,
+         },
+         "items": rows,
+     }
+diff --git a/src/soe_radar/coverage_tasks.py b/src/soe_radar/coverage_tasks.py
+new file mode 100644
+index 0000000..64eeaa9
+--- /dev/null
++++ b/src/soe_radar/coverage_tasks.py
+@@ -0,0 +1,571 @@
++"""Idempotent coverage task planning and bounded execution."""
++
++from __future__ import annotations
++
++import hashlib
++import json
++import re
++from datetime import UTC, datetime, timedelta
++from urllib.parse import urljoin, urlsplit
++
++from sqlalchemy import select
++
++from .config import Settings
++from .fetching import Fetcher
++from .models import (
++    CoverageTask,
++    Employer,
++    RegistrySnapshot,
++    RegistryState,
++    SourceCandidate,
++    SourceEmployerScope,
++    stamp,
++)
++from .schemas import SourceSpec, local_now
++from .urls import public_url
++
++ENTRY_SIGNAL = re.compile(r"招聘|校招|校园|人才|加入我们|毕业生|补录|报名")
++REGISTRY_SIGNAL = re.compile(r"监管企业|企业名录|企业名单|所出资企业|出资企业|国企名录|企业目录")
++
++
++def _key(*parts):
++    return hashlib.sha256("\0".join(str(part) for part in parts).encode()).hexdigest()
++
++
++def _priority_for_registry(spec):
++    if spec.category.startswith("central"):
++        return "P0"
++    if spec.category in ("local", "corps"):
++        return "P1"
++    return "P2"
++
++
++def _entry_period():
++    return f"cohort:{local_now().year + 1}"
++
++
++def _add_task(
++    session,
++    *,
++    scope_type,
++    scope_id,
++    action,
++    priority,
++    period_key="",
++    next_action="",
++    evidence=None,
++):
++    key = _key(scope_type, scope_id, action, period_key)
++    existing = session.scalar(select(CoverageTask).where(CoverageTask.task_key == key))
++    if existing:
++        if existing.status == "done":
++            return False
++        existing.priority = priority
++        existing.next_action = next_action or existing.next_action
++        if evidence:
++            existing.evidence = {**(existing.evidence or {}), **evidence}
++        return False
++    session.add(
++        CoverageTask(
++            task_key=key,
++            scope_type=scope_type,
++            scope_id=scope_id,
++            action=action,
++            priority=priority,
++            next_action=next_action,
++            evidence=evidence or {},
++            period_key=period_key,
++            due_at=stamp(),
++        )
++    )
++    return True
++
++
++def _memberships(session):
++    states = {row.id: row for row in session.scalars(select(RegistryState))}
++    snapshots = {row.id: row for row in session.scalars(select(RegistrySnapshot))}
++    names = {}
++    for registry_id, state in states.items():
++        snapshot = snapshots.get(state.active_snapshot_id)
++        if not snapshot:
++            continue
++        for entry in snapshot.entries:
++            names.setdefault(entry["name"], []).append(registry_id)
++    return names
++
++
++def plan_tasks(db, cfg: Settings, *, priorities=None, limit=None):
++    """Create idempotent tasks from current registry, entry and candidate gaps."""
++    priorities = set(priorities or [])
++    created = 0
++    existing = 0
++    with db.session() as s:
++        for spec in cfg.registries:
++            priority = _priority_for_registry(spec)
++            if priorities and priority not in priorities:
++                continue
++            state = s.get(RegistryState, spec.id)
++            if spec.url:
++                stale = not state or state.status in ("error", "partial", "unverified", "bundled")
++                if stale:
++                    if _add_task(
++                        s,
++                        scope_type="registry",
++                        scope_id=spec.id,
++                        action="refresh_registry",
++                        priority=priority,
++                        period_key="evergreen",
++                        next_action="读取官方名录全部分页并保存证据",
++                    ):
++                        created += 1
++                    else:
++                        existing += 1
++            else:
++                if _add_task(
++                    s,
++                    scope_type="registry",
++                    scope_id=spec.id,
++                    action="discover_registry",
++                    priority=priority,
++                    period_key="evergreen",
++                    next_action="从主管部门官网导航/站内搜索定位名录入口",
++                    evidence={"authority_url": spec.authority_url, "scope": spec.scope},
++                ):
++                    created += 1
++                else:
++                    existing += 1
++
++        memberships = _memberships(s)
++        source_employers = set()
++        for source in cfg.sources:
++            if source.employer:
++                source_employers.add(source.employer)
++                source_employers.update(source.aliases or [])
++        employers = list(s.scalars(select(Employer)))
++        for employer in employers:
++            if employer.name not in memberships and not employer.parent_id:
++                continue
++            names = {employer.name, *(employer.aliases or [])}
++            if names & source_employers:
++                continue
++            priority = "P1" if employer.parent_id else "P2"
++            if priorities and priority not in priorities:
++                continue
++            if limit is not None and created >= limit:
++                break
++            if _add_task(
++                s,
++                scope_type="employer",
++                scope_id=employer.id,
++                action="discover_entry",
++                priority=priority,
++                period_key=_entry_period(),
++                next_action="从企业官网导航或官方招聘栏目寻找入口",
++                evidence={"employer": employer.name, "proof_url": employer.proof_url},
++            ):
++                created += 1
++            else:
++                existing += 1
++
++        candidates = list(
++            s.scalars(select(SourceCandidate).where(SourceCandidate.status.in_(("lead", "identity_checked"))))
++        )
++        for candidate in candidates:
++            if _add_task(
++                s,
++                scope_type="source_candidate",
++                scope_id=candidate.id,
++                action="verify_candidate",
++                priority="P1",
++                period_key="candidate",
++                next_action="验证列表、详情、报名入口和附件",
++                evidence={"url": candidate.url, "employer": candidate.employer_name},
++            ):
++                created += 1
++            else:
++                existing += 1
++    return {"created": created, "existing": existing}
++
++
++def add_source_candidate(
++    db,
++    *,
++    employer_id,
++    employer_name,
++    url,
++    domain="",
++    entry_type="unknown",
++    discovery_method="",
++    identity_evidence="",
++    scope_employer_ids=None,
++    status="lead",
++    evidence_path="",
++):
++    url = public_url(url)
++    domain = domain or (urlsplit(url).hostname or "")
++    key = _key(employer_id or employer_name, url)
++    with db.session() as s:
++        existing = s.scalar(select(SourceCandidate).where(SourceCandidate.candidate_key == key))
++        if existing:
++            return existing.id
++        candidate = SourceCandidate(
++            candidate_key=key,
++            employer_id=employer_id,
++            employer_name=employer_name,
++            url=url,
++            domain=domain,
++            entry_type=entry_type,
++            discovery_method=discovery_method,
++            identity_evidence=identity_evidence,
++            scope_employer_ids=scope_employer_ids or [],
++            status=status,
++            evidence_path=evidence_path,
++        )
++        s.add(candidate)
++        s.flush()
++        return candidate.id
++
++
++def add_source_scope(
++    db,
++    *,
++    source_id,
++    employer_name,
++    mode="group_umbrella",
++    evidence_url,
++    quote,
++    cohorts=None,
++    batch_scope="",
++    status="needs_review",
++):
++    public_url(evidence_url)
++    with db.session() as s:
++        employer = s.scalar(select(Employer).where(Employer.name == employer_name))
++        if not employer:
++            raise ValueError("企业未建档")
++        existing = s.scalar(
++            select(SourceEmployerScope).where(
++                SourceEmployerScope.source_id == source_id,
++                SourceEmployerScope.employer_id == employer.id,
++                SourceEmployerScope.mode == mode,
++                SourceEmployerScope.batch_scope == batch_scope,
++            )
++        )
++        if not existing:
++            existing = SourceEmployerScope(
++                source_id=source_id,
++                employer_id=employer.id,
++                mode=mode,
++                batch_scope=batch_scope,
++            )
++            s.add(existing)
++        existing.evidence_url = evidence_url
++        existing.quote = quote
++        existing.cohorts = cohorts or []
++        existing.status = status
++        if status == "confirmed":
++            existing.verified_at = stamp()
++        s.flush()
++        return existing.id
++
++
++def _reset_stale(db):
++    cutoff = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
++    with db.session() as s:
++        for task in s.scalars(
++            select(CoverageTask).where(CoverageTask.status == "running", CoverageTask.updated_at < cutoff)
++        ):
++            task.status = "pending"
++            task.last_error = "上次执行中断，已恢复为待办"
++            task.updated_at = stamp()
++
++
++async def _discover_registry(db, cfg, task):
++    spec = next((row for row in cfg.registries if row.id == task.scope_id), None)
++    if not spec or not spec.authority_url:
++        return {"status": "needs_review", "next_action": "未配置主管部门入口，需人工补充"}
++    fetcher = Fetcher(cfg)
++    try:
++        host = urlsplit(spec.authority_url).hostname or ""
++        response = await fetcher.get(
++            spec.authority_url,
++            domains=[host] if host else None,
++            network_mode=spec.network_mode,
++        )
++        from bs4 import BeautifulSoup
++
++        soup = BeautifulSoup(response.text, "html.parser")
++        links = []
++        for anchor in soup.select("a[href]"):
++            label = anchor.get_text(" ", strip=True)
++            if REGISTRY_SIGNAL.search(label):
++                links.append({"label": label, "url": urljoin(str(response.url), anchor.get("href", ""))})
++        return {
++            "status": "needs_review" if links else "blocked",
++            "evidence": {
++                "authority_url": spec.authority_url,
++                "candidate_links": links[:50],
++                "checked_at": stamp(),
++            },
++            "next_action": "人工核对候选名录入口并保存官方分页/附件证据"
++            if links
++            else "官网未发现名录入口，改用站内搜索或公开目录",
++        }
++    except Exception as exc:
++        return {"status": "pending", "error": str(exc)[:300], "next_action": "网络失败，退避后重试"}
++    finally:
++        await fetcher.close()
++
++
++async def _discover_entry(db, cfg, task):
++    with db.session() as s:
++        employer = s.get(Employer, task.scope_id)
++    if not employer:
++        return {"status": "done", "next_action": "企业记录不存在，任务关闭"}
++    start_url = employer.proof_url
++    if not start_url:
++        return {"status": "needs_review", "next_action": "缺少企业官网或官方档案页，需人工补充"}
++    fetcher = Fetcher(cfg)
++    try:
++        host = urlsplit(start_url).hostname or ""
++        response = await fetcher.get(start_url, domains=[host] if host else None)
++        from bs4 import BeautifulSoup
++
++        soup = BeautifulSoup(response.text, "html.parser")
++        links = []
++        for anchor in soup.select("a[href]"):
++            label = anchor.get_text(" ", strip=True)
++            if ENTRY_SIGNAL.search(label):
++                target = urljoin(str(response.url), anchor.get("href", ""))
++                if target.startswith(("http://", "https://")):
++                    links.append({"label": label[:120], "url": target})
++        created = []
++        for link in links[:20]:
++            try:
++                candidate_id = add_source_candidate(
++                    db,
++                    employer_id=employer.id,
++                    employer_name=employer.name,
++                    url=link["url"],
++                    discovery_method="official_site_nav",
++                    identity_evidence=start_url,
++                    status="lead",
++                )
++                created.append(candidate_id)
++            except ValueError:
++                continue
++        return {
++            "status": "needs_review" if links else "done",
++            "evidence": {
++                "checked_url": start_url,
++                "candidate_links": links[:20],
++                "created_candidates": created,
++                "checked_at": stamp(),
++            },
++            "next_action": "验证候选入口的列表/详情/附件"
++            if links
++            else "官网未发现招聘入口，记录检查范围，不推断不招聘",
++        }
++    except Exception as exc:
++        return {"status": "pending", "error": str(exc)[:300], "next_action": "网络失败，退避后重试"}
++    finally:
++        await fetcher.close()
++
++
++async def _verify_candidate(db, cfg, task):
++    with db.session() as s:
++        candidate = s.get(SourceCandidate, task.scope_id)
++    if not candidate:
++        return {"status": "done", "next_action": "候选不存在，任务关闭"}
++    source = SourceSpec(
++        id="candidate:" + candidate.id,
++        name=candidate.employer_name or candidate.domain,
++        url=candidate.url,
++        domains=[candidate.domain] if candidate.domain else [],
++        policy="company",
++    )
++    fetcher = Fetcher(cfg)
++    try:
++        page = await fetcher.page(candidate.url, source)
++        links = fetcher.candidates(page, source)
++        detail = {}
++        attachments = {}
++        if links:
++            try:
++                doc = await fetcher.document(links[0][0], source, links[0][1])
++                detail = {
++                    "title": doc.title,
++                    "text_len": len(doc.text),
++                    "published_at": str(doc.published_at or ""),
++                }
++                attachments = {
++                    "count": len(doc.attachments),
++                    "statuses": [item.get("status") for item in doc.attachments],
++                }
++            except Exception as exc:
++                detail = {"error": str(exc)[:300]}
++        status = "verified" if links and detail and not detail.get("error") else "needs_review"
++        folder = cfg.data_dir / "candidates"
++        folder.mkdir(parents=True, exist_ok=True)
++        evidence = folder / (candidate.id + ".json")
++        evidence.write_text(
++            json.dumps(
++                {
++                    "candidate_id": candidate.id,
++                    "employer": candidate.employer_name,
++                    "url": candidate.url,
++                    "title": page.title,
++                    "via": page.via,
++                    "text_excerpt": page.text[:20000],
++                    "links": links[:20],
++                    "detail": detail,
++                    "attachments": attachments,
++                    "checked_at": stamp(),
++                },
++                ensure_ascii=False,
++                indent=2,
++            ),
++            encoding="utf-8",
++        )
++        with db.session() as s:
++            row = s.get(SourceCandidate, candidate.id)
++            row.list_result = {"links": len(links), "sample": links[:5], "via": page.via}
++            row.detail_result = detail
++            row.attachment_result = attachments
++            row.status = status
++            row.evidence_path = str(evidence.relative_to(cfg.data_dir))
++            row.last_checked = stamp()
++            row.updated_at = stamp()
++        return {
++            "status": "done",
++            "next_action": "候选已验证但仍未启用；需人工确认官方身份并接入配置"
++            if status == "verified"
++            else "列表或详情未通过，保留候选待人工核对",
++            "evidence": {"candidate_id": candidate.id, "list": len(links), "detail": detail},
++        }
++    except Exception as exc:
++        with db.session() as s:
++            row = s.get(SourceCandidate, candidate.id)
++            row.status = "blocked"
++            row.last_checked = stamp()
++            row.updated_at = stamp()
++        return {"status": "blocked", "error": str(exc)[:300], "next_action": "访问受阻，保留候选与失败原因"}
++    finally:
++        await fetcher.close()
++
++
++async def execute_task(db, cfg, task):
++    if task.action == "refresh_registry":
++        from .coverage import refresh_registries
++
++        result = await refresh_registries(db, cfg, ids=[task.scope_id])
++        item = result["registries"][0] if result["registries"] else {}
++        if item.get("status") in ("success", "partial", "imported"):
++            return {
++                "status": "done" if item.get("status") == "success" else "needs_review",
++                "evidence": item,
++                "next_action": "" if item.get("status") == "success" else "核对失败分页并重试",
++            }
++        return {"status": "pending", "error": item.get("error", "名录读取失败"), "next_action": "退避后重试"}
++    if task.action == "discover_registry":
++        return await _discover_registry(db, cfg, task)
++    if task.action == "discover_entry":
++        return await _discover_entry(db, cfg, task)
++    if task.action == "verify_candidate":
++        return await _verify_candidate(db, cfg, task)
++    return {"status": "blocked", "error": "未知任务动作", "next_action": "人工检查任务配置"}
++
++
++async def run_tasks(db, cfg, *, batch=20, executor=None):
++    from .models import uid
++
++    owner = uid()
++    if not db.acquire("coverage", owner, seconds=900):
++        raise ValueError("已有覆盖任务持有租约")
++    _reset_stale(db)
++    now = stamp()
++    with db.session() as s:
++        tasks = list(
++            s.scalars(
++                select(CoverageTask)
++                .where(CoverageTask.status == "pending", CoverageTask.due_at <= now)
++                .order_by(CoverageTask.priority, CoverageTask.created_at)
++                .limit(batch)
++            )
++        )
++    results = []
++    try:
++        for task in tasks:
++            with db.session() as s:
++                row = s.get(CoverageTask, task.id)
++                row.status = "running"
++                row.updated_at = stamp()
++            try:
++                result = await (executor or execute_task)(db, cfg, task)
++                status = result.get("status", "done")
++                error = result.get("error", "")
++            except Exception as exc:
++                result = {"error": str(exc)[:300], "next_action": "异常中断，退避后重试"}
++                status, error = "pending", str(exc)[:300]
++            with db.session() as s:
++                row = s.get(CoverageTask, task.id)
++                row.status = status
++                row.attempts += 1
++                row.last_error = error
++                row.last_run_at = stamp()
++                row.updated_at = stamp()
++                if result.get("evidence"):
++                    row.evidence = {**(row.evidence or {}), **result["evidence"]}
++                if result.get("next_action"):
++                    row.next_action = result["next_action"]
++                if status in ("pending", "blocked"):
++                    delay = min(2 ** max(row.attempts, 1), 24)
++                    row.due_at = (datetime.now(UTC) + timedelta(hours=delay)).isoformat()
++                    if row.attempts >= 5:
++                        row.status = "blocked"
++            results.append({"id": task.id, "action": task.action, "status": status, "error": error})
++    finally:
++        db.release("coverage", owner)
++    return {"processed": len(results), "results": results}
++
++
++def task_rows(db, *, status=None, limit=200):
++    with db.session() as s:
++        query = select(CoverageTask).order_by(CoverageTask.priority, CoverageTask.created_at).limit(limit)
++        if status:
++            query = query.where(CoverageTask.status == status)
++        return [
++            {
++                "id": row.id,
++                "scope_type": row.scope_type,
++                "scope_id": row.scope_id,
++                "action": row.action,
++                "priority": row.priority,
++                "status": row.status,
++                "attempts": row.attempts,
++                "last_error": row.last_error,
++                "next_action": row.next_action,
++                "due_at": row.due_at,
++            }
++            for row in s.scalars(query)
++        ]
++
++
++def candidate_rows(db, *, status=None, limit=200):
++    with db.session() as s:
++        query = select(SourceCandidate).order_by(SourceCandidate.created_at.desc()).limit(limit)
++        if status:
++            query = query.where(SourceCandidate.status == status)
++        return [
++            {
++                "id": row.id,
++                "employer": row.employer_name,
++                "url": row.url,
++                "entry_type": row.entry_type,
++                "status": row.status,
++                "last_checked": row.last_checked,
++                "list_result": row.list_result,
++                "detail_result": row.detail_result,
++            }
++            for row in s.scalars(query)
++        ]
 diff --git a/src/soe_radar/defaults.yaml b/src/soe_radar/defaults.yaml
 index 58b5886..c357b63 100644
 --- a/src/soe_radar/defaults.yaml
@@ -2363,8 +3098,41 @@ index 0000000..816e3ea
 +
 +def downgrade():
 +    raise RuntimeError("关系证据审计不支持有损降级；请恢复备份。")
+diff --git a/src/soe_radar/migrations/versions/0009_coverage_tasks.py b/src/soe_radar/migrations/versions/0009_coverage_tasks.py
+new file mode 100644
+index 0000000..982633c
+--- /dev/null
++++ b/src/soe_radar/migrations/versions/0009_coverage_tasks.py
+@@ -0,0 +1,27 @@
++from alembic import op
++
++revision = "0009"
++down_revision = "0008"
++branch_labels = None
++depends_on = None
++
++
++def upgrade():
++    op.execute(
++        "CREATE TABLE coverage_tasks (id VARCHAR NOT NULL PRIMARY KEY, task_key VARCHAR NOT NULL UNIQUE, scope_type VARCHAR NOT NULL, scope_id VARCHAR NOT NULL, action VARCHAR NOT NULL, priority VARCHAR NOT NULL, status VARCHAR NOT NULL, attempts INTEGER NOT NULL, last_error VARCHAR NOT NULL, next_action VARCHAR NOT NULL, evidence JSON NOT NULL, period_key VARCHAR NOT NULL, due_at VARCHAR, last_run_at VARCHAR, created_at VARCHAR NOT NULL, updated_at VARCHAR NOT NULL)"
++    )
++    op.execute("CREATE INDEX ix_coverage_tasks_status ON coverage_tasks(status)")
++    op.execute(
++        "CREATE TABLE source_candidates (id VARCHAR NOT NULL PRIMARY KEY, candidate_key VARCHAR NOT NULL UNIQUE, employer_id VARCHAR REFERENCES employers(id), employer_name VARCHAR NOT NULL, url VARCHAR NOT NULL, domain VARCHAR NOT NULL, entry_type VARCHAR NOT NULL, discovery_method VARCHAR NOT NULL, identity_evidence VARCHAR NOT NULL, scope_employer_ids JSON NOT NULL, status VARCHAR NOT NULL, list_result JSON NOT NULL, detail_result JSON NOT NULL, attachment_result JSON NOT NULL, evidence_path VARCHAR NOT NULL, last_checked VARCHAR, created_at VARCHAR NOT NULL, updated_at VARCHAR NOT NULL)"
++    )
++    op.execute("CREATE INDEX ix_source_candidates_employer_id ON source_candidates(employer_id)")
++    op.execute("CREATE INDEX ix_source_candidates_status ON source_candidates(status)")
++    op.execute(
++        "CREATE TABLE source_employer_scopes (id VARCHAR NOT NULL PRIMARY KEY, source_id VARCHAR NOT NULL, employer_id VARCHAR NOT NULL REFERENCES employers(id), mode VARCHAR NOT NULL, evidence_url VARCHAR NOT NULL, quote TEXT NOT NULL, cohorts JSON NOT NULL, batch_scope VARCHAR NOT NULL, status VARCHAR NOT NULL, verified_at VARCHAR, UNIQUE(source_id, employer_id, mode, batch_scope))"
++    )
++    op.execute("CREATE INDEX ix_source_employer_scopes_source_id ON source_employer_scopes(source_id)")
++    op.execute("CREATE INDEX ix_source_employer_scopes_employer_id ON source_employer_scopes(employer_id)")
++
++
++def downgrade():
++    raise RuntimeError("覆盖任务和候选来源保留审计，不支持有损降级；请恢复备份。")
 diff --git a/src/soe_radar/models.py b/src/soe_radar/models.py
-index 86ffd58..bc2eaf8 100644
+index 86ffd58..7525a65 100644
 --- a/src/soe_radar/models.py
 +++ b/src/soe_radar/models.py
 @@ -31,6 +31,21 @@ class Employer(Base):
@@ -2389,6 +3157,67 @@ index 86ffd58..bc2eaf8 100644
  class Activity(Base):
      __tablename__ = "activities"
      id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
+@@ -242,3 +257,60 @@ class DiscoveryCall(Base):
+     created_at: Mapped[str] = mapped_column(String, default=stamp)
+     query: Mapped[str] = mapped_column(String)
+     status: Mapped[str] = mapped_column(String, default="reserved")
++
++
++class CoverageTask(Base):
++    __tablename__ = "coverage_tasks"
++    id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
++    task_key: Mapped[str] = mapped_column(String, unique=True)
++    scope_type: Mapped[str] = mapped_column(String)
++    scope_id: Mapped[str] = mapped_column(String)
++    action: Mapped[str] = mapped_column(String)
++    priority: Mapped[str] = mapped_column(String, default="P2")
++    status: Mapped[str] = mapped_column(String, default="pending", index=True)
++    attempts: Mapped[int] = mapped_column(Integer, default=0)
++    last_error: Mapped[str] = mapped_column(String, default="")
++    next_action: Mapped[str] = mapped_column(String, default="")
++    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
++    period_key: Mapped[str] = mapped_column(String, default="")
++    due_at: Mapped[str | None] = mapped_column(String)
++    last_run_at: Mapped[str | None] = mapped_column(String)
++    created_at: Mapped[str] = mapped_column(String, default=stamp)
++    updated_at: Mapped[str] = mapped_column(String, default=stamp)
++
++
++class SourceCandidate(Base):
++    __tablename__ = "source_candidates"
++    id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
++    candidate_key: Mapped[str] = mapped_column(String, unique=True)
++    employer_id: Mapped[str | None] = mapped_column(ForeignKey("employers.id"), index=True)
++    employer_name: Mapped[str] = mapped_column(String, default="")
++    url: Mapped[str] = mapped_column(String)
++    domain: Mapped[str] = mapped_column(String, default="")
++    entry_type: Mapped[str] = mapped_column(String, default="unknown")
++    discovery_method: Mapped[str] = mapped_column(String, default="")
++    identity_evidence: Mapped[str] = mapped_column(String, default="")
++    scope_employer_ids: Mapped[list] = mapped_column(JSON, default=list)
++    status: Mapped[str] = mapped_column(String, default="lead", index=True)
++    list_result: Mapped[dict] = mapped_column(JSON, default=dict)
++    detail_result: Mapped[dict] = mapped_column(JSON, default=dict)
++    attachment_result: Mapped[dict] = mapped_column(JSON, default=dict)
++    evidence_path: Mapped[str] = mapped_column(String, default="")
++    last_checked: Mapped[str | None] = mapped_column(String)
++    created_at: Mapped[str] = mapped_column(String, default=stamp)
++    updated_at: Mapped[str] = mapped_column(String, default=stamp)
++
++
++class SourceEmployerScope(Base):
++    __tablename__ = "source_employer_scopes"
++    id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
++    source_id: Mapped[str] = mapped_column(String, index=True)
++    employer_id: Mapped[str] = mapped_column(ForeignKey("employers.id"), index=True)
++    mode: Mapped[str] = mapped_column(String, default="group_umbrella")
++    evidence_url: Mapped[str] = mapped_column(String, default="")
++    quote: Mapped[str] = mapped_column(Text, default="")
++    cohorts: Mapped[list] = mapped_column(JSON, default=list)
++    batch_scope: Mapped[str] = mapped_column(String, default="")
++    status: Mapped[str] = mapped_column(String, default="needs_review")
++    verified_at: Mapped[str | None] = mapped_column(String)
++    __table_args__ = (UniqueConstraint("source_id", "employer_id", "mode", "batch_scope"),)
 diff --git a/src/soe_radar/relationships.py b/src/soe_radar/relationships.py
 new file mode 100644
 index 0000000..599fc3f
@@ -3133,6 +3962,159 @@ index 6b86c9b..d85a1a7 100644
 +        assert "page_url" not in entry and "page_sha256" not in entry and "page_path" not in entry
 +        assert entry["page_binding_candidates"][0]["path"] == "registries/missing.html"
 +    assert repair_registry_snapshots(db, apply=False) == []
+diff --git a/tests/test_coverage_tasks.py b/tests/test_coverage_tasks.py
+new file mode 100644
+index 0000000..73596a1
+--- /dev/null
++++ b/tests/test_coverage_tasks.py
+@@ -0,0 +1,147 @@
++from datetime import UTC, datetime, timedelta
++
++from sqlalchemy import select
++
++from soe_radar.config import Settings
++from soe_radar.coverage import coverage_report
++from soe_radar.coverage_tasks import (
++    _reset_stale,
++    add_source_candidate,
++    add_source_scope,
++    plan_tasks,
++    run_tasks,
++    task_rows,
++)
++from soe_radar.db import initialize
++from soe_radar.models import CoverageTask, Employer
++
++
++def task_settings(tmp_path):
++    return Settings.model_validate(
++        {
++            "data_dir": str(tmp_path / "data"),
++            "registries": [
++                {
++                    "id": "missing-registry",
++                    "name": "待查名录",
++                    "category": "local",
++                    "region": "示例省",
++                    "authority_url": "https://example.gov.cn/",
++                }
++            ],
++            "sources": [
++                {
++                    "id": "group",
++                    "name": "示例集团",
++                    "employer": "示例集团有限公司",
++                    "url": "https://example.org/jobs",
++                    "domains": ["example.org"],
++                }
++            ],
++        }
++    )
++
++
++def test_plan_tasks_is_idempotent_and_does_not_count_candidates(tmp_path):
++    cfg = task_settings(tmp_path)
++    db = initialize(cfg)
++    first = plan_tasks(db, cfg)
++    second = plan_tasks(db, cfg)
++    assert first["created"] >= 1
++    assert second["created"] == 0
++    assert second["existing"] >= first["created"]
++    with db.session() as s:
++        employer = s.scalar(select(Employer).where(Employer.name == "示例集团有限公司"))
++        assert employer
++    before = coverage_report(db, cfg)["summary"]["with_entry"]
++    add_source_candidate(
++        db,
++        employer_id=employer.id,
++        employer_name=employer.name,
++        url="https://example.org/jobs",
++        discovery_method="test",
++    )
++    assert coverage_report(db, cfg)["summary"]["with_entry"] == before
++    third = plan_tasks(db, cfg)
++    assert third["created"] >= 1
++    assert any(row["action"] == "verify_candidate" for row in task_rows(db, status="pending"))
++
++
++def test_run_tasks_success_and_failure_backoff(tmp_path):
++    cfg = task_settings(tmp_path)
++    db = initialize(cfg)
++    plan_tasks(db, cfg)
++
++    async def fail(_db, _cfg, _task):
++        raise RuntimeError("offline test failure")
++
++    result = run_tasks(db, cfg, batch=1, executor=fail)
++    import asyncio
++
++    outcome = asyncio.run(result)
++    assert outcome["processed"] == 1
++    with db.session() as s:
++        task = s.scalar(select(CoverageTask))
++        assert task.attempts == 1
++        assert task.status == "pending"
++        assert task.due_at > datetime.now(UTC).isoformat()
++
++    async def succeed(_db, _cfg, _task):
++        return {"status": "done", "next_action": ""}
++
++    with db.session() as s:
++        task = s.scalar(select(CoverageTask))
++        task.due_at = "2000-01-01T00:00:00+00:00"
++    asyncio.run(run_tasks(db, cfg, batch=1, executor=succeed))
++    with db.session() as s:
++        task = s.scalar(select(CoverageTask))
++        assert task.status == "done"
++
++
++def test_stale_running_task_is_recovered(tmp_path):
++    cfg = task_settings(tmp_path)
++    db = initialize(cfg)
++    plan_tasks(db, cfg)
++    with db.session() as s:
++        task = s.scalar(select(CoverageTask))
++        task.status = "running"
++        task.updated_at = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
++    _reset_stale(db)
++    with db.session() as s:
++        task = s.scalar(select(CoverageTask))
++        assert task.status == "pending"
++        assert "恢复" in task.last_error
++
++
++def test_source_scope_is_explicit_and_deduplicated(tmp_path):
++    cfg = task_settings(tmp_path)
++    db = initialize(cfg)
++    with db.session() as s:
++        s.add(Employer(name="示例子公司有限公司"))
++    first = add_source_scope(
++        db,
++        source_id="group",
++        employer_name="示例子公司有限公司",
++        evidence_url="https://example.org/group",
++        quote="示例子公司由集团统一招聘",
++        cohorts=[2027],
++        batch_scope="2027秋招",
++    )
++    second = add_source_scope(
++        db,
++        source_id="group",
++        employer_name="示例子公司有限公司",
++        evidence_url="https://example.org/group",
++        quote="示例子公司由集团统一招聘",
++        cohorts=[2027],
++        batch_scope="2027秋招",
++        status="confirmed",
++    )
++    assert first == second
++    from soe_radar.models import SourceEmployerScope
++
++    with db.session() as s:
++        rows = list(s.scalars(select(SourceEmployerScope)))
++        assert len(rows) == 1
++        assert rows[0].status == "confirmed"
++        assert rows[0].cohorts == [2027]
 diff --git a/tests/test_delivery.py b/tests/test_delivery.py
 new file mode 100644
 index 0000000..a933f76
