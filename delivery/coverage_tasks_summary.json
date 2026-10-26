@@ -3,8 +3,8 @@
   "by_status": {
     "needs_review": 92,
     "blocked": 188,
-    "pending": 315,
-    "done": 122
+    "pending": 372,
+    "done": 65
   },
   "by_action": {
     "discover_registry": 28,

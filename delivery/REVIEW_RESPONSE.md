@@ -66,10 +66,28 @@ unresolved_binding_does_not_export_guessed_evidence: true
 
 - 相比扩覆盖前备份：新增 26 条校招、18 条 2027 届。
 - 当前累计：24 个来源、125 条校招、66 条 2027 届、7 条已核验 2027 届。
-- 候选来源 241 条：64 verified、174 blocked、3 needs_review；未自动启用。
-- 任务队列 717 条：28 名录、448 入口、241 候选验证；315 pending、188 blocked、92 needs_review、122 done。
+- 候选来源 241 条：0 verified、6 readable、4 needs_review、57 lead、174 blocked；旧 verified 已降为 readable 并进入复查，未把“列表/详情可读”当作完整验证。
+- 任务队列 717 条：28 名录、448 入口、241 候选验证；372 pending、188 blocked、92 needs_review、65 done。
 - 新增 7 条 `source_employer_scopes`，只登记集团自身范围，不自动覆盖子公司。
 - 入口缺口从 448 降到 441。
+
+## 覆盖任务管理复审（CQ1–CQ6）
+
+- CQ1：身份合并现在迁移/合并 `SourceCandidate`、`SourceEmployerScope`、候选 `scope_employer_ids` 和 `CoverageTask` 逻辑引用；同 URL/同源范围冲突时合并证据后删除重复行，再 flush 删除 Employer。候选与范围外键场景均通过。
+- CQ2：`coverage-run` 每任务前续租；用条件 UPDATE 原子领取；丢失租约后停止领取且不覆盖其他运行结果。中断任务改为 `coverage-recover` 显式审计恢复，不再按固定小时自动清扫。
+- CQ3：`coverage_report` 读取 confirmed、有效届别、启用来源、`group_umbrella/independent` 的 `SourceEmployerScope`；共享来源失败会传播 blocked；needs_review/aggregator 不计入监测。规划任务也会跳过已有有效范围映射的企业。
+- CQ4：候选验证拆分为 identity/list/detail/application/attachments；只有报名路径确认且必要附件未失败才 `verified`，列表/详情可读但缺报名/附件为 `readable`，必要附件失败为 `needs_review`。旧 64 条 verified 已降为 readable 并重新排队复查；不能把“可读”当完整验证。
+- CQ5：到期 blocked 任务在 attempts<5 时可重试；新增 `coverage-requeue` 受控重排 blocked/needs_review，重置次数并写审计；`coverage-recover` 处理中断 running。
+- CQ6：`coverage-plan` 的 priorities/limit 统一作用于名录、企业和候选阶段；`limit=0` 不再创建 P1 候选任务。
+
+复现：
+
+```text
+uv run python delivery/review_coverage_queue_repro.py
+8 个探针全部 passes=true
+```
+
+旧 14 个探针继续通过；`uv run pytest -q` 171 passed；58 个证据文件哈希全部 OK。
 
 ## 报告口径更正
 

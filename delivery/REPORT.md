@@ -26,15 +26,15 @@
 - 相比 2026-10-25 扩覆盖前备份：**新增 26 条校招、18 条 2027 届**。
 - 当前累计：24 个来源、125 条未合并校招、66 条 2027 届、7 条已核验 2027 届。
 - 入口缺口从 448 降到 441；“入口未找到”仍逐家保留。
-- 新增 4 条 `source_employer_scopes`，只登记集团自身范围，不自动覆盖全部子公司。
-- 候选来源 241 条：64 verified、174 blocked、3 needs_review；未自动启用。
-- 任务队列 717 条：28 名录、448 入口、241 候选验证；315 pending、188 blocked、92 needs_review、122 done。
+- 新增 7 条 `source_employer_scopes`，只登记集团自身范围，不自动覆盖全部子公司。
+- 候选来源 241 条：0 verified、6 readable、4 needs_review、57 lead、174 blocked；旧 verified 已降为 readable 并进入复查，未把“列表/详情可读”当作完整验证。
+- 任务队列 717 条：28 名录、448 入口、241 候选验证；372 pending、188 blocked、92 needs_review、65 done。
 
 以下第 2–8 节保留 2026-10-23 基线口径；本节是本轮最新扩覆盖结果。
 
-## 2. 相对接手状态的净新增
+## 2. 相对接手状态的累计净新增（截至 2026-10-26）
 
-以下数字来自本轮开始前的数据库备份 `/tmp/soe-baseline/radar.db` 与当前 `data/radar.db` 的逐表对比，不把旧数据算成本轮成绩。
+以下为接手基线（2026-10-23 备份）与当前库的累计对比，不是单一批次；2026-10-25 扩覆盖批次增量见 1.1。
 
 | 指标 | 接手基线 | 本轮结束 | 净新增/变化 |
 | --- | ---: | ---: | ---: |
@@ -51,7 +51,7 @@
 
 说明：
 
-- 数据库 598 家企业中，`employers.jsonl` 只导出 458 家“有名录、来源、母公司或企业性质依据”的主体；其余是抽取过程中产生的未证实名称，不进入交付企业条目。
+- 数据库 639 家企业中，`employers.jsonl` 只导出 458 家“有名录、来源、母公司或企业性质依据”的主体；其余是抽取过程中产生的未证实名称，不进入交付企业条目。
 - 5 组括号别名/全半角括号造成的重复企业身份已合并，例如 `中国旅游集团有限公司[香港中旅（集团）有限公司]` 的别名归入 `中国旅游集团有限公司`，`南光（集团）有限公司[中国南光集团有限公司]` 归入 `南光（集团）有限公司`；原显示名保留为别名，活动、个人状态、关系和审核记录保留，旧快照不删除。
 - “净新增 2027 届 12 条”按本轮新产生的 opportunity ID 统计，分布为：重庆国资委 4、NCSS 4、南方电网 2、黑龙江国资委 1、湖南国资委 1。
 
@@ -205,9 +205,9 @@
 测试与构建：
 
 ```text
-uv run pytest -q            → 161 passed, 1 warning
+uv run pytest -q            → 171 passed, 1 warning
 ruff check src tests        → All checks passed
-ruff format --check src tests → 48 files already formatted
+ruff format --check src tests → 49 files already formatted
 uv build                    → sdist + wheel 成功
 ```
 

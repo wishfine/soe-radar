@@ -1,0 +1,8 @@
+{"probe": "due_blocked_task_can_retry", "expected": 1, "actual": 1, "passes": true}
+{"probe": "missing_application_and_required_attachment_do_not_verify", "expected": "needs_review", "actual": "needs_review", "passes": true}
+{"probe": "confirmed_scope_is_used_by_coverage_report", "expected": ["group"], "actual": ["group"], "passes": true}
+{"probe": "shared_source_failure_reaches_participant", "expected": "blocked", "actual": "blocked", "passes": true}
+{"probe": "alias_merge_preserves_new_candidate_references", "expected": "ok", "actual": "ok", "passes": true}
+{"probe": "alias_merge_preserves_new_scope_references", "expected": "ok", "actual": "ok", "passes": true}
+{"probe": "second_task_runs_once_after_lease_expiry", "expected": 1, "actual": 1, "passes": true}
+{"probe": "P0_plan_with_zero_limit_creates_no_P1_tasks", "expected": [], "actual": [], "passes": true}
