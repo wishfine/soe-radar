@@ -703,6 +703,8 @@ def test_application_requires_action_bound_to_target(tmp_path):
     for text, expected in [
         ("咨询邮箱：help@example.org（仅接受咨询，不接收简历）。", "needs_review"),
         ("集团概况：https://example.org/about。没有提供申请路径。", "needs_review"),
+        ("请勿将简历发送至 help@example.org，该邮箱仅供咨询，不接收简历。", "needs_review"),
+        ("了解集团概况请访问 https://example.org/about，此处未提供申请路径。", "needs_review"),
         ("请将简历发送至 hr@example.org 完成报名。", "found"),
         ("请通过 https://apply.example.org 提交申请。", "found"),
     ]:
@@ -712,3 +714,49 @@ def test_application_requires_action_bound_to_target(tmp_path):
         with db.session() as s:
             row = s.get(SourceCandidate, cid)
             assert row.detail_result["verification"]["application"] == expected
+
+
+def test_scope_merge_uses_decision_timestamp_not_input_order(tmp_path):
+    from soe_radar.identity import merge_alias_employers
+    from soe_radar.models import SourceEmployerScope
+
+    cfg = task_settings(tmp_path)
+    db = initialize(cfg)
+    canonical = "示例单位有限公司"
+    alias = "示例单位有限公司[示例单位别称]"
+    with db.session() as s:
+        target = Employer(name=canonical, org_type="soe", proof_url="https://example.org/about")
+        s.add_all([target, Employer(name=alias)])
+        s.flush()
+        target_id = target.id
+    base = dict(source_id="group", cohorts=[2027], batch_scope="2027秋招")
+    add_source_scope(
+        db,
+        **base,
+        employer_name=alias,
+        evidence_url="https://example.org/old",
+        quote="旧别名确认",
+        status="confirmed",
+    )
+    scope_id = add_source_scope(
+        db,
+        **base,
+        employer_name=canonical,
+        evidence_url="https://example.org/new",
+        quote="规范名确认",
+        status="confirmed",
+    )
+    add_source_scope(
+        db,
+        **base,
+        employer_name=canonical,
+        evidence_url="https://example.org/new",
+        quote="最新复核撤回",
+        status="needs_review",
+    )
+    merge_alias_employers(db, apply=True)
+    with db.session() as s:
+        row = s.get(SourceEmployerScope, scope_id)
+        assert row.status == "needs_review"
+    child = next(row for row in coverage_report(db, cfg, cohort=2027)["items"] if row["id"] == target_id)
+    assert child["sources"] == []
