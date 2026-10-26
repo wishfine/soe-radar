@@ -66,8 +66,8 @@ unresolved_binding_does_not_export_guessed_evidence: true
 
 - 相比扩覆盖前备份：新增 26 条校招、18 条 2027 届。
 - 当前累计：24 个来源、125 条校招、66 条 2027 届、7 条已核验 2027 届。
-- 候选来源 241 条：0 verified、6 readable、4 needs_review、57 lead、174 blocked；旧 verified 已降为 readable 并进入复查，未把“列表/详情可读”当作完整验证。
-- 任务队列 717 条：28 名录、448 入口、241 候选验证；372 pending、188 blocked、92 needs_review、65 done。
+- 候选来源 241 条：0 verified、8 readable、9 needs_review、51 lead、173 blocked；旧 verified 已降为 readable 并进入复查，未把“列表/详情可读”当作完整验证。
+- 任务队列 717 条：28 名录、448 入口、241 候选验证；366 pending、187 blocked、92 needs_review、72 done。
 - 新增 7 条 `source_employer_scopes`，只登记集团自身范围，不自动覆盖子公司。
 - 入口缺口从 448 降到 441。
 

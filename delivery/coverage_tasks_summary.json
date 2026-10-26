@@ -2,9 +2,9 @@
   "total": 717,
   "by_status": {
     "needs_review": 92,
-    "blocked": 188,
-    "pending": 372,
-    "done": 65
+    "blocked": 187,
+    "pending": 366,
+    "done": 72
   },
   "by_action": {
     "discover_registry": 28,
