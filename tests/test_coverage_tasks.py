@@ -871,3 +871,63 @@ def test_application_sentence_context_and_mixed_emails(tmp_path):
         assert row.status == "verified"
         assert row.detail_result["verification"]["application"] == "found"
         assert row.detail_result["application_target"] == "hr@example.org"
+
+
+def test_legacy_merge_isolates_all_conflicting_cohorts(tmp_path):
+    from soe_radar.identity import merge_alias_employers
+    from soe_radar.models import SourceEmployerScope
+
+    cfg = task_settings(tmp_path)
+    db = initialize(cfg)
+    canonical = "示例单位有限公司"
+    alias = "示例单位有限公司[示例单位别称]"
+    with db.session() as s:
+        target = Employer(name=canonical, org_type="soe", proof_url="https://example.org/about")
+        s.add_all([target, Employer(name=alias)])
+        s.flush()
+        target_id = target.id
+    base = dict(source_id="group", batch_scope="统一校招")
+    add_source_scope(
+        db,
+        **base,
+        employer_name=alias,
+        evidence_url="https://example.org/old",
+        quote="旧别名确认三届",
+        cohorts=[2027, 2028, 2029],
+        status="confirmed",
+    )
+    scope_id = add_source_scope(
+        db,
+        **base,
+        employer_name=canonical,
+        evidence_url="https://example.org/new",
+        quote="规范名确认三届",
+        cohorts=[2027, 2028, 2029],
+        status="confirmed",
+    )
+    add_source_scope(
+        db,
+        **base,
+        employer_name=canonical,
+        evidence_url="https://example.org/new",
+        quote="撤回2027和2028",
+        cohorts=[2027, 2028],
+        status="needs_review",
+    )
+    with db.session() as s:
+        for row in s.scalars(select(SourceEmployerScope)):
+            row.provenance = [
+                {key: value for key, value in record.items() if key != "decided_at"}
+                for record in row.provenance
+            ]
+            from soe_radar.coverage_tasks import recompute_scope
+
+            recompute_scope(row)
+    merge_alias_employers(db, apply=True)
+    with db.session() as s:
+        assert s.get(SourceEmployerScope, scope_id).cohorts == [2029]
+    for cohort in (2027, 2028):
+        item = next(row for row in coverage_report(db, cfg, cohort=cohort)["items"] if row["id"] == target_id)
+        assert item["sources"] == []
+    item = next(row for row in coverage_report(db, cfg, cohort=2029)["items"] if row["id"] == target_id)
+    assert [source["id"] for source in item["sources"]] == ["group"]
