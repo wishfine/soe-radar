@@ -205,9 +205,9 @@
 测试与构建：
 
 ```text
-uv run pytest -q            → 171 passed, 1 warning
+uv run pytest -q            → 174 passed, 1 warning
 ruff check src tests        → All checks passed
-ruff format --check src tests → 49 files already formatted
+ruff format --check src tests → 50 files already formatted
 uv build                    → sdist + wheel 成功
 ```
 
@@ -294,6 +294,15 @@ uv run python delivery/review_t2_evidence_repro.py
 known_hash_but_wrong_enterprise_page: true
 unresolved_binding_does_not_export_guessed_evidence: true
 ```
+
+## 7.5 CQ 跟进修复（F1–F4）
+
+- F1：身份合并先计算冲突 task_key 并合并任务证据/状态/所有权，再修改唯一键；同周期任务不再触发唯一键错误。
+- F2：`SourceEmployerScope` 增加 `provenance` 审计列；范围合并保留每条 URL/原文/届别/批次/状态/核验时间，不再把相同原文过滤为空。
+- F3：共享范围按 confirmed 证据计算届别；未确认届别保留在 provenance 中但不计入监测，confirmed 2027 + needs_review 2028 合并后只计 2027。
+- F4：报名阶段要求可定位的 URL/邮箱/报名系统/地址；预告、另行通知、暂未公布不判为 found；入口、活动、截止继续分开验收。
+
+复现：`delivery/review_coverage_queue_followup_repro.py` 6 个探针全部通过；旧 14 个 + CQ 8 个探针继续通过。
 
 ## 8. 尚未解决的主要缺口
 

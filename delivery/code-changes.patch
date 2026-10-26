@@ -1287,10 +1287,10 @@ index 19dba35..2860e11 100644
      }
 diff --git a/src/soe_radar/coverage_tasks.py b/src/soe_radar/coverage_tasks.py
 new file mode 100644
-index 0000000..1901b19
+index 0000000..0569124
 --- /dev/null
 +++ b/src/soe_radar/coverage_tasks.py
-@@ -0,0 +1,799 @@
+@@ -0,0 +1,849 @@
 +"""Idempotent coverage task planning and bounded execution."""
 +
 +from __future__ import annotations
@@ -1549,6 +1549,36 @@ index 0000000..1901b19
 +        return candidate.id
 +
 +
++def scope_evidence(scope):
++    records = list(scope.provenance or [])
++    if not records and scope.evidence_url:
++        records.append(
++            {
++                "url": scope.evidence_url,
++                "quote": scope.quote,
++                "cohorts": list(scope.cohorts or []),
++                "batch_scope": scope.batch_scope,
++                "status": scope.status,
++                "verified_at": scope.verified_at,
++            }
++        )
++    return records
++
++
++def recompute_scope(scope):
++    records = scope_evidence(scope)
++    confirmed = [record for record in records if record.get("status") == "confirmed"]
++    primary = (confirmed or records)[-1] if records else {}
++    scope.provenance = records
++    scope.status = "confirmed" if confirmed else "needs_review"
++    scope.cohorts = sorted(
++        {cohort for record in (confirmed or records) for cohort in (record.get("cohorts") or [])}
++    )
++    scope.quote = primary.get("quote", "")
++    scope.evidence_url = primary.get("url", "")
++    scope.verified_at = primary.get("verified_at") if confirmed else None
++
++
 +def add_source_scope(
 +    db,
 +    *,
@@ -1582,12 +1612,19 @@ index 0000000..1901b19
 +                batch_scope=batch_scope,
 +            )
 +            s.add(existing)
-+        existing.evidence_url = evidence_url
-+        existing.quote = quote
-+        existing.cohorts = cohorts or []
-+        existing.status = status
-+        if status == "confirmed":
-+            existing.verified_at = stamp()
++        record = {
++            "url": evidence_url,
++            "quote": quote,
++            "cohorts": cohorts or [],
++            "batch_scope": batch_scope,
++            "status": status,
++            "verified_at": stamp() if status == "confirmed" else None,
++        }
++        records = scope_evidence(existing)
++        if record not in records:
++            records.append(record)
++        existing.provenance = records
++        recompute_scope(existing)
 +        s.flush()
 +        return existing.id
 +
@@ -1781,14 +1818,27 @@ index 0000000..1901b19
 +                    "count": len(doc.attachments),
 +                    "statuses": attachment_statuses,
 +                }
-+                application_match = re.search(r".{0,40}(报名|投递|网申|申请).{0,80}", text)
-+                if application_match:
-+                    verification["application"] = "found"
-+                    detail["application_quote"] = application_match.group().strip()
-+                elif re.search(r"无需报名|不适用", text):
++                future = re.search(
++                    r"另行通知|暂未公布|尚未公布|待公布|请关注后续|仅为预告|预告|报名入口.{0,10}(?:暂未|未开放)|未开放报名",
++                    text,
++                )
++                email = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
++                link = re.search(r"https?://[^\s，。；;]+", text)
++                concrete = re.search(
++                    r"(网申系统|报名系统|招聘系统|投递邮箱|报名邮箱|报名链接|网申链接|报名地址|现场报名|扫码报名)",
++                    text,
++                )
++                if re.search(r"无需报名|不适用", text):
 +                    verification["application"] = "not_applicable"
++                elif future:
++                    verification["application"] = "needs_review"
++                    detail["application_reason"] = "公告为预告或报名方式尚未公布"
++                elif email or link or concrete:
++                    verification["application"] = "found"
++                    detail["application_quote"] = (email or link or concrete).group()
 +                else:
 +                    verification["application"] = "needs_review"
++                    detail["application_reason"] = "未发现可定位的报名入口/邮箱/地址"
 +                required_attachment_failed = bool(
 +                    re.search(r"附件|报名材料|详见", text)
 +                    and any(value in ("failed", "needs_ocr", "needs_review") for value in attachment_statuses)
@@ -3265,10 +3315,10 @@ index cc7b92f..435812b 100644
                              attachment["url"],
 diff --git a/src/soe_radar/identity.py b/src/soe_radar/identity.py
 new file mode 100644
-index 0000000..66bcd12
+index 0000000..0ac1221
 --- /dev/null
 +++ b/src/soe_radar/identity.py
-@@ -0,0 +1,293 @@
+@@ -0,0 +1,310 @@
 +"""Merge display-name variants into one employer identity without losing history."""
 +
 +from __future__ import annotations
@@ -3279,6 +3329,7 @@ index 0000000..66bcd12
 +from sqlalchemy import select
 +
 +from .coverage import split_alias
++from .coverage_tasks import recompute_scope, scope_evidence
 +from .models import (
 +    Activity,
 +    CoverageTask,
@@ -3369,30 +3420,47 @@ index 0000000..66bcd12
 +
 +
 +def _remap_task(session, scope_type, old_id, new_id):
-+    for task in list(
++    tasks = list(
 +        session.scalars(
 +            select(CoverageTask).where(CoverageTask.scope_type == scope_type, CoverageTask.scope_id == old_id)
 +        )
-+    ):
-+        task.scope_id = new_id
-+        task.task_key = _key(scope_type, new_id, task.action, task.period_key)
-+        conflict = session.scalar(
-+            select(CoverageTask).where(CoverageTask.task_key == task.task_key, CoverageTask.id != task.id)
++    )
++    if not tasks:
++        return
++    status_order = {"done": 0, "needs_review": 1, "blocked": 2, "pending": 3, "running": 4}
++    kept = {}
++    for task in tasks:
++        new_key = _key(scope_type, new_id, task.action, task.period_key)
++        conflict = kept.get(new_key) or session.scalar(
++            select(CoverageTask).where(CoverageTask.task_key == new_key, CoverageTask.id != task.id)
 +        )
 +        if conflict:
++            merged_ids = list(
++                dict.fromkeys(
++                    [
++                        *((conflict.evidence or {}).get("merged_task_ids", [])),
++                        task.id,
++                    ]
++                )
++            )
 +            conflict.evidence = {
 +                **(conflict.evidence or {}),
 +                **(task.evidence or {}),
-+                "merged_task_ids": list(
-+                    dict.fromkeys(
-+                        [
-+                            *((conflict.evidence or {}).get("merged_task_ids", [])),
-+                            task.id,
-+                        ]
-+                    )
-+                ),
++                "merged_task_ids": merged_ids,
 +            }
++            if status_order.get(task.status, 0) > status_order.get(conflict.status, 0):
++                conflict.status = task.status
++            conflict.attempts = max(conflict.attempts, task.attempts)
++            conflict.owner = conflict.owner or task.owner
++            if task.due_at and (not conflict.due_at or task.due_at < conflict.due_at):
++                conflict.due_at = task.due_at
 +            session.delete(task)
++        else:
++            kept[new_key] = task
++    for new_key, task in kept.items():
++        task.scope_id = new_id
++        task.task_key = new_key
++    session.flush()
 +
 +
 +def _merge_candidate(session, candidate, target):
@@ -3429,17 +3497,16 @@ index 0000000..66bcd12
 +        )
 +    )
 +    if existing:
-+        existing.quote = "\n---\n".join(
-+            value for value in (existing.quote, scope.quote) if value and value not in existing.quote
-+        )
-+        existing.cohorts = sorted(set((existing.cohorts or []) + (scope.cohorts or [])))
-+        if scope.status == "confirmed":
-+            existing.status = "confirmed"
-+            existing.verified_at = existing.verified_at or scope.verified_at
-+        existing.evidence_url = existing.evidence_url or scope.evidence_url
++        records = scope_evidence(existing)
++        for record in scope_evidence(scope):
++            if record not in records:
++                records.append(record)
++        existing.provenance = records
++        recompute_scope(existing)
 +        session.delete(scope)
 +        return
 +    scope.employer_id = target.id
++    recompute_scope(scope)
 +
 +
 +def merge_alias_employers(db, *, apply=False):
@@ -3659,8 +3726,28 @@ index 0000000..ea29608
 +
 +def downgrade():
 +    raise RuntimeError("覆盖任务运行归属保留审计，不支持有损降级；请恢复备份。")
+diff --git a/src/soe_radar/migrations/versions/0011_source_scope_provenance.py b/src/soe_radar/migrations/versions/0011_source_scope_provenance.py
+new file mode 100644
+index 0000000..2245de0
+--- /dev/null
++++ b/src/soe_radar/migrations/versions/0011_source_scope_provenance.py
+@@ -0,0 +1,14 @@
++from alembic import op
++
++revision = "0011"
++down_revision = "0010"
++branch_labels = None
++depends_on = None
++
++
++def upgrade():
++    op.execute("ALTER TABLE source_employer_scopes ADD COLUMN provenance JSON NOT NULL DEFAULT '[]'")
++
++
++def downgrade():
++    raise RuntimeError("共享范围证据审计不支持有损降级；请恢复备份。")
 diff --git a/src/soe_radar/models.py b/src/soe_radar/models.py
-index 86ffd58..7930e33 100644
+index 86ffd58..f90d192 100644
 --- a/src/soe_radar/models.py
 +++ b/src/soe_radar/models.py
 @@ -31,6 +31,21 @@ class Employer(Base):
@@ -3685,7 +3772,7 @@ index 86ffd58..7930e33 100644
  class Activity(Base):
      __tablename__ = "activities"
      id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
-@@ -242,3 +257,61 @@ class DiscoveryCall(Base):
+@@ -242,3 +257,62 @@ class DiscoveryCall(Base):
      created_at: Mapped[str] = mapped_column(String, default=stamp)
      query: Mapped[str] = mapped_column(String)
      status: Mapped[str] = mapped_column(String, default="reserved")
@@ -3745,6 +3832,7 @@ index 86ffd58..7930e33 100644
 +    cohorts: Mapped[list] = mapped_column(JSON, default=list)
 +    batch_scope: Mapped[str] = mapped_column(String, default="")
 +    status: Mapped[str] = mapped_column(String, default="needs_review")
++    provenance: Mapped[list] = mapped_column(JSON, default=list)
 +    verified_at: Mapped[str | None] = mapped_column(String)
 +    __table_args__ = (UniqueConstraint("source_id", "employer_id", "mode", "batch_scope"),)
 diff --git a/src/soe_radar/relationships.py b/src/soe_radar/relationships.py
@@ -4493,10 +4581,10 @@ index 6b86c9b..d85a1a7 100644
 +    assert repair_registry_snapshots(db, apply=False) == []
 diff --git a/tests/test_coverage_tasks.py b/tests/test_coverage_tasks.py
 new file mode 100644
-index 0000000..1ab92c0
+index 0000000..d790ee6
 --- /dev/null
 +++ b/tests/test_coverage_tasks.py
-@@ -0,0 +1,508 @@
+@@ -0,0 +1,632 @@
 +from datetime import UTC, datetime, timedelta
 +
 +from sqlalchemy import select
@@ -5005,6 +5093,130 @@ index 0000000..1ab92c0
 +        asyncio.run(_verify_candidate(db, cfg, SimpleNamespace(scope_id=cid)))
 +    with db.session() as s:
 +        assert s.get(SourceCandidate, cid).status == "readable"
++
++
++def test_alias_merge_merges_same_period_tasks_without_unique_error(tmp_path):
++    from soe_radar.coverage_tasks import _key
++    from soe_radar.identity import merge_alias_employers
++
++    cfg = task_settings(tmp_path)
++    db = initialize(cfg)
++    with db.session() as s:
++        target = s.scalar(select(Employer).where(Employer.name == "示例集团有限公司"))
++        duplicate = Employer(name="示例集团有限公司[示例集团别称]")
++        s.add(duplicate)
++        s.flush()
++        for employer_id in (target.id, duplicate.id):
++            s.add(
++                CoverageTask(
++                    task_key=_key("employer", employer_id, "discover_entry", "cohort:2027"),
++                    scope_type="employer",
++                    scope_id=employer_id,
++                    action="discover_entry",
++                    period_key="cohort:2027",
++                    due_at="2000-01-01T00:00:00+00:00",
++                )
++            )
++        target_id = target.id
++    merge_alias_employers(db, apply=True)
++    with db.session() as s:
++        tasks = list(s.scalars(select(CoverageTask).where(CoverageTask.scope_id == target_id)))
++        assert len(tasks) == 1
++
++
++def test_scope_merge_preserves_quote_and_unconfirmed_cohort(tmp_path):
++    from soe_radar.identity import merge_alias_employers
++    from soe_radar.models import SourceEmployerScope
++
++    cfg = task_settings(tmp_path)
++    db = initialize(cfg)
++    with db.session() as s:
++        target = s.scalar(select(Employer).where(Employer.name == "示例集团有限公司"))
++        duplicate = Employer(name="示例集团有限公司[示例集团别称]")
++        s.add(duplicate)
++        s.flush()
++        target_id = target.id
++    quote = "示例集团参加2027校园招聘，采用统一报名入口。"
++    add_source_scope(
++        db,
++        source_id="group",
++        employer_name="示例集团有限公司",
++        evidence_url="https://example.org/2027",
++        quote=quote,
++        cohorts=[2027],
++        batch_scope="统一校招",
++        status="confirmed",
++    )
++    add_source_scope(
++        db,
++        source_id="group",
++        employer_name="示例集团有限公司[示例集团别称]",
++        evidence_url="https://example.org/2028-lead",
++        quote="2028届参与范围尚待确认",
++        cohorts=[2028],
++        batch_scope="统一校招",
++        status="needs_review",
++    )
++    merge_alias_employers(db, apply=True)
++    with db.session() as s:
++        scope = s.scalar(select(SourceEmployerScope))
++        assert scope.quote == quote
++        assert scope.cohorts == [2027]
++        assert len(scope.provenance) == 2
++    report_cfg = cfg.model_copy(
++        update={"sources": [cfg.sources[0].model_copy(update={"employer": "另一集团有限公司"})]}
++    )
++    item = next(
++        row for row in coverage_report(db, report_cfg, cohort=2028)["items"] if row["id"] == target_id
++    )
++    assert item["sources"] == []
++
++
++def test_application_not_announced_is_not_found(tmp_path):
++    import asyncio
++    from types import SimpleNamespace
++    from unittest.mock import patch
++
++    cfg = task_settings(tmp_path)
++    db = initialize(cfg)
++    with db.session() as s:
++        employer = s.scalar(select(Employer))
++    cid = add_source_candidate(
++        db,
++        employer_id=employer.id,
++        employer_name=employer.name,
++        url="https://example.org/jobs",
++        discovery_method="official_site_nav",
++        identity_evidence="https://example.org/about",
++    )
++
++    class FakeFetcher:
++        def __init__(self, cfg):
++            pass
++
++        async def page(self, url, source):
++            return SimpleNamespace(title="招聘", text="列表", via="http")
++
++        def candidates(self, page, source):
++            return [("https://example.org/notice", "2027校园招聘预告")]
++
++        async def document(self, url, source, title):
++            return SimpleNamespace(
++                title=title,
++                text="2027校园招聘预告。报名方式另行通知，暂未公布报名入口。",
++                published_at=None,
++                attachments=[],
++            )
++
++        async def close(self):
++            pass
++
++    with patch("soe_radar.coverage_tasks.Fetcher", FakeFetcher):
++        asyncio.run(_verify_candidate(db, cfg, SimpleNamespace(scope_id=cid)))
++    with db.session() as s:
++        candidate = s.get(SourceCandidate, cid)
++        assert candidate.status == "readable"
++        assert candidate.detail_result["verification"]["application"] == "needs_review"
 diff --git a/tests/test_delivery.py b/tests/test_delivery.py
 new file mode 100644
 index 0000000..a933f76

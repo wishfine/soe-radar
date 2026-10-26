@@ -89,6 +89,22 @@ uv run python delivery/review_coverage_queue_repro.py
 
 旧 14 个探针继续通过；`uv run pytest -q` 171 passed；58 个证据文件哈希全部 OK。
 
+## CQ 跟进（F1–F4）
+
+- F1：`_remap_task` 先计算目标 task_key、查询冲突并合并证据/状态/运行归属，再修改唯一键；同周期企业任务和候选任务冲突不再触发唯一键错误，不同周期保持独立。
+- F2：`SourceEmployerScope` 新增 `provenance` 审计列（迁移 0011）；范围合并按完整证据记录去重，保留各自 URL、原文、届别、批次、状态和核验时间，不再用拼接文本覆盖原文。
+- F3：范围合并按 confirmed/needs_review 分项计算；`cohorts` 只取 confirmed 证据的届别，未确认届别保留在 provenance 中但不计入监测。2027 confirmed + 2028 needs_review 合并后为 `[2027]`，2028 报告不返回该共享入口。
+- F4：报名阶段要求可定位的 URL/邮箱/具体报名系统/地址；“另行通知、暂未公布、仅为预告”判为 needs_review；明确无需报名与未提供入口分开；入口、活动、截止仍分别验收。
+
+复现：
+
+```text
+uv run python delivery/review_coverage_queue_followup_repro.py
+6 个探针全部 passes=true
+```
+
+旧 14 个探针 + CQ 8 个探针继续通过；`uv run pytest -q` 174 passed；58 个证据文件哈希全部 OK。
+
 ## 报告口径更正
 
 - 本轮净新增校招机会改为 **28 条**（55→83），其中 2027 届 12 条；`activity_diff.json` 可复核 ID 差集。此前“33 条”是未排除山西结果公示前的旧口径。

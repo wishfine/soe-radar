@@ -1,0 +1,6 @@
+{"probe": "same_period_employer_tasks_merge_without_unique_error", "expected": "ok", "actual": "UNIQUE constraint failed: coverage_tasks.task_key", "passes": false}
+{"probe": "identical_scope_quotes_survive_merge", "expected": "示例集团参加2027校园招聘，采用统一报名入口。", "actual": "", "passes": false}
+{"probe": "unconfirmed_cohort_is_not_promoted_by_merge", "expected": [2027], "actual": [2027, 2028], "passes": false}
+{"probe": "unconfirmed_2028_scope_does_not_count_as_entry", "expected": [], "actual": ["group"], "passes": false}
+{"probe": "application_not_announced_remains_readable", "expected": "readable", "actual": "verified", "passes": false}
+{"probe": "application_not_announced_is_not_found", "expected": "needs_review", "actual": "found", "passes": false}
