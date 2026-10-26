@@ -8,6 +8,7 @@ from collections import defaultdict
 from sqlalchemy import select
 
 from .coverage import split_alias
+from .coverage_tasks import recompute_scope, scope_evidence
 from .models import (
     Activity,
     CoverageTask,
@@ -98,30 +99,47 @@ def _key(*parts):
 
 
 def _remap_task(session, scope_type, old_id, new_id):
-    for task in list(
+    tasks = list(
         session.scalars(
             select(CoverageTask).where(CoverageTask.scope_type == scope_type, CoverageTask.scope_id == old_id)
         )
-    ):
-        task.scope_id = new_id
-        task.task_key = _key(scope_type, new_id, task.action, task.period_key)
-        conflict = session.scalar(
-            select(CoverageTask).where(CoverageTask.task_key == task.task_key, CoverageTask.id != task.id)
+    )
+    if not tasks:
+        return
+    status_order = {"done": 0, "needs_review": 1, "blocked": 2, "pending": 3, "running": 4}
+    kept = {}
+    for task in tasks:
+        new_key = _key(scope_type, new_id, task.action, task.period_key)
+        conflict = kept.get(new_key) or session.scalar(
+            select(CoverageTask).where(CoverageTask.task_key == new_key, CoverageTask.id != task.id)
         )
         if conflict:
+            merged_ids = list(
+                dict.fromkeys(
+                    [
+                        *((conflict.evidence or {}).get("merged_task_ids", [])),
+                        task.id,
+                    ]
+                )
+            )
             conflict.evidence = {
                 **(conflict.evidence or {}),
                 **(task.evidence or {}),
-                "merged_task_ids": list(
-                    dict.fromkeys(
-                        [
-                            *((conflict.evidence or {}).get("merged_task_ids", [])),
-                            task.id,
-                        ]
-                    )
-                ),
+                "merged_task_ids": merged_ids,
             }
+            if status_order.get(task.status, 0) > status_order.get(conflict.status, 0):
+                conflict.status = task.status
+            conflict.attempts = max(conflict.attempts, task.attempts)
+            conflict.owner = conflict.owner or task.owner
+            if task.due_at and (not conflict.due_at or task.due_at < conflict.due_at):
+                conflict.due_at = task.due_at
             session.delete(task)
+        else:
+            kept[new_key] = task
+    for new_key, task in kept.items():
+        task.scope_id = new_id
+        task.task_key = new_key
+    session.flush()
 
 
 def _merge_candidate(session, candidate, target):
@@ -158,17 +176,16 @@ def _merge_scope(session, scope, target):
         )
     )
     if existing:
-        existing.quote = "\n---\n".join(
-            value for value in (existing.quote, scope.quote) if value and value not in existing.quote
-        )
-        existing.cohorts = sorted(set((existing.cohorts or []) + (scope.cohorts or [])))
-        if scope.status == "confirmed":
-            existing.status = "confirmed"
-            existing.verified_at = existing.verified_at or scope.verified_at
-        existing.evidence_url = existing.evidence_url or scope.evidence_url
+        records = scope_evidence(existing)
+        for record in scope_evidence(scope):
+            if record not in records:
+                records.append(record)
+        existing.provenance = records
+        recompute_scope(existing)
         session.delete(scope)
         return
     scope.employer_id = target.id
+    recompute_scope(scope)
 
 
 def merge_alias_employers(db, *, apply=False):

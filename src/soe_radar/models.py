@@ -313,5 +313,6 @@ class SourceEmployerScope(Base):
     cohorts: Mapped[list] = mapped_column(JSON, default=list)
     batch_scope: Mapped[str] = mapped_column(String, default="")
     status: Mapped[str] = mapped_column(String, default="needs_review")
+    provenance: Mapped[list] = mapped_column(JSON, default=list)
     verified_at: Mapped[str | None] = mapped_column(String)
     __table_args__ = (UniqueConstraint("source_id", "employer_id", "mode", "batch_scope"),)

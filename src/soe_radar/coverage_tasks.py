@@ -256,6 +256,36 @@ def add_source_candidate(
         return candidate.id
 
 
+def scope_evidence(scope):
+    records = list(scope.provenance or [])
+    if not records and scope.evidence_url:
+        records.append(
+            {
+                "url": scope.evidence_url,
+                "quote": scope.quote,
+                "cohorts": list(scope.cohorts or []),
+                "batch_scope": scope.batch_scope,
+                "status": scope.status,
+                "verified_at": scope.verified_at,
+            }
+        )
+    return records
+
+
+def recompute_scope(scope):
+    records = scope_evidence(scope)
+    confirmed = [record for record in records if record.get("status") == "confirmed"]
+    primary = (confirmed or records)[-1] if records else {}
+    scope.provenance = records
+    scope.status = "confirmed" if confirmed else "needs_review"
+    scope.cohorts = sorted(
+        {cohort for record in (confirmed or records) for cohort in (record.get("cohorts") or [])}
+    )
+    scope.quote = primary.get("quote", "")
+    scope.evidence_url = primary.get("url", "")
+    scope.verified_at = primary.get("verified_at") if confirmed else None
+
+
 def add_source_scope(
     db,
     *,
@@ -289,12 +319,19 @@ def add_source_scope(
                 batch_scope=batch_scope,
             )
             s.add(existing)
-        existing.evidence_url = evidence_url
-        existing.quote = quote
-        existing.cohorts = cohorts or []
-        existing.status = status
-        if status == "confirmed":
-            existing.verified_at = stamp()
+        record = {
+            "url": evidence_url,
+            "quote": quote,
+            "cohorts": cohorts or [],
+            "batch_scope": batch_scope,
+            "status": status,
+            "verified_at": stamp() if status == "confirmed" else None,
+        }
+        records = scope_evidence(existing)
+        if record not in records:
+            records.append(record)
+        existing.provenance = records
+        recompute_scope(existing)
         s.flush()
         return existing.id
 
@@ -488,14 +525,27 @@ async def _verify_candidate(db, cfg, task):
                     "count": len(doc.attachments),
                     "statuses": attachment_statuses,
                 }
-                application_match = re.search(r".{0,40}(报名|投递|网申|申请).{0,80}", text)
-                if application_match:
-                    verification["application"] = "found"
-                    detail["application_quote"] = application_match.group().strip()
-                elif re.search(r"无需报名|不适用", text):
+                future = re.search(
+                    r"另行通知|暂未公布|尚未公布|待公布|请关注后续|仅为预告|预告|报名入口.{0,10}(?:暂未|未开放)|未开放报名",
+                    text,
+                )
+                email = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+                link = re.search(r"https?://[^\s，。；;]+", text)
+                concrete = re.search(
+                    r"(网申系统|报名系统|招聘系统|投递邮箱|报名邮箱|报名链接|网申链接|报名地址|现场报名|扫码报名)",
+                    text,
+                )
+                if re.search(r"无需报名|不适用", text):
                     verification["application"] = "not_applicable"
+                elif future:
+                    verification["application"] = "needs_review"
+                    detail["application_reason"] = "公告为预告或报名方式尚未公布"
+                elif email or link or concrete:
+                    verification["application"] = "found"
+                    detail["application_quote"] = (email or link or concrete).group()
                 else:
                     verification["application"] = "needs_review"
+                    detail["application_reason"] = "未发现可定位的报名入口/邮箱/地址"
                 required_attachment_failed = bool(
                     re.search(r"附件|报名材料|详见", text)
                     and any(value in ("failed", "needs_ocr", "needs_review") for value in attachment_statuses)

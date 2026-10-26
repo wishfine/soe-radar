@@ -506,3 +506,127 @@ def test_verify_stages_distinguish_readable_and_verified(tmp_path):
         asyncio.run(_verify_candidate(db, cfg, SimpleNamespace(scope_id=cid)))
     with db.session() as s:
         assert s.get(SourceCandidate, cid).status == "readable"
+
+
+def test_alias_merge_merges_same_period_tasks_without_unique_error(tmp_path):
+    from soe_radar.coverage_tasks import _key
+    from soe_radar.identity import merge_alias_employers
+
+    cfg = task_settings(tmp_path)
+    db = initialize(cfg)
+    with db.session() as s:
+        target = s.scalar(select(Employer).where(Employer.name == "示例集团有限公司"))
+        duplicate = Employer(name="示例集团有限公司[示例集团别称]")
+        s.add(duplicate)
+        s.flush()
+        for employer_id in (target.id, duplicate.id):
+            s.add(
+                CoverageTask(
+                    task_key=_key("employer", employer_id, "discover_entry", "cohort:2027"),
+                    scope_type="employer",
+                    scope_id=employer_id,
+                    action="discover_entry",
+                    period_key="cohort:2027",
+                    due_at="2000-01-01T00:00:00+00:00",
+                )
+            )
+        target_id = target.id
+    merge_alias_employers(db, apply=True)
+    with db.session() as s:
+        tasks = list(s.scalars(select(CoverageTask).where(CoverageTask.scope_id == target_id)))
+        assert len(tasks) == 1
+
+
+def test_scope_merge_preserves_quote_and_unconfirmed_cohort(tmp_path):
+    from soe_radar.identity import merge_alias_employers
+    from soe_radar.models import SourceEmployerScope
+
+    cfg = task_settings(tmp_path)
+    db = initialize(cfg)
+    with db.session() as s:
+        target = s.scalar(select(Employer).where(Employer.name == "示例集团有限公司"))
+        duplicate = Employer(name="示例集团有限公司[示例集团别称]")
+        s.add(duplicate)
+        s.flush()
+        target_id = target.id
+    quote = "示例集团参加2027校园招聘，采用统一报名入口。"
+    add_source_scope(
+        db,
+        source_id="group",
+        employer_name="示例集团有限公司",
+        evidence_url="https://example.org/2027",
+        quote=quote,
+        cohorts=[2027],
+        batch_scope="统一校招",
+        status="confirmed",
+    )
+    add_source_scope(
+        db,
+        source_id="group",
+        employer_name="示例集团有限公司[示例集团别称]",
+        evidence_url="https://example.org/2028-lead",
+        quote="2028届参与范围尚待确认",
+        cohorts=[2028],
+        batch_scope="统一校招",
+        status="needs_review",
+    )
+    merge_alias_employers(db, apply=True)
+    with db.session() as s:
+        scope = s.scalar(select(SourceEmployerScope))
+        assert scope.quote == quote
+        assert scope.cohorts == [2027]
+        assert len(scope.provenance) == 2
+    report_cfg = cfg.model_copy(
+        update={"sources": [cfg.sources[0].model_copy(update={"employer": "另一集团有限公司"})]}
+    )
+    item = next(
+        row for row in coverage_report(db, report_cfg, cohort=2028)["items"] if row["id"] == target_id
+    )
+    assert item["sources"] == []
+
+
+def test_application_not_announced_is_not_found(tmp_path):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    cfg = task_settings(tmp_path)
+    db = initialize(cfg)
+    with db.session() as s:
+        employer = s.scalar(select(Employer))
+    cid = add_source_candidate(
+        db,
+        employer_id=employer.id,
+        employer_name=employer.name,
+        url="https://example.org/jobs",
+        discovery_method="official_site_nav",
+        identity_evidence="https://example.org/about",
+    )
+
+    class FakeFetcher:
+        def __init__(self, cfg):
+            pass
+
+        async def page(self, url, source):
+            return SimpleNamespace(title="招聘", text="列表", via="http")
+
+        def candidates(self, page, source):
+            return [("https://example.org/notice", "2027校园招聘预告")]
+
+        async def document(self, url, source, title):
+            return SimpleNamespace(
+                title=title,
+                text="2027校园招聘预告。报名方式另行通知，暂未公布报名入口。",
+                published_at=None,
+                attachments=[],
+            )
+
+        async def close(self):
+            pass
+
+    with patch("soe_radar.coverage_tasks.Fetcher", FakeFetcher):
+        asyncio.run(_verify_candidate(db, cfg, SimpleNamespace(scope_id=cid)))
+    with db.session() as s:
+        candidate = s.get(SourceCandidate, cid)
+        assert candidate.status == "readable"
+        assert candidate.detail_result["verification"]["application"] == "needs_review"
