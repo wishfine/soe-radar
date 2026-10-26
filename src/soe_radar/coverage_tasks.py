@@ -273,17 +273,36 @@ def scope_evidence(scope):
 
 
 def recompute_scope(scope):
+    """Current review state is the latest decision per cohort; history stays in provenance."""
     records = scope_evidence(scope)
-    confirmed = [record for record in records if record.get("status") == "confirmed"]
-    primary = (confirmed or records)[-1] if records else {}
-    scope.provenance = records
-    scope.status = "confirmed" if confirmed else "needs_review"
-    scope.cohorts = sorted(
-        {cohort for record in (confirmed or records) for cohort in (record.get("cohorts") or [])}
+    decisions = {}
+    latest_record = records[-1] if records else {}
+    for record in records:
+        for cohort in record.get("cohorts") or []:
+            decisions[cohort] = record
+    confirmed_cohorts = sorted(
+        cohort for cohort, record in decisions.items() if record.get("status") == "confirmed"
     )
+    confirmed_records = [record for record in records if record.get("status") == "confirmed"]
+    if confirmed_cohorts:
+        primary = next(
+            record
+            for record in reversed(records)
+            if record.get("status") == "confirmed"
+            and set(record.get("cohorts") or []) & set(confirmed_cohorts)
+        )
+        scope.status = "confirmed"
+        scope.cohorts = confirmed_cohorts
+    else:
+        primary = latest_record
+        scope.status = "needs_review"
+        scope.cohorts = sorted({cohort for record in records for cohort in (record.get("cohorts") or [])})
+    scope.provenance = records
     scope.quote = primary.get("quote", "")
     scope.evidence_url = primary.get("url", "")
-    scope.verified_at = primary.get("verified_at") if confirmed else None
+    scope.verified_at = (
+        primary.get("verified_at") if confirmed_records and scope.status == "confirmed" else None
+    )
 
 
 def add_source_scope(
@@ -531,8 +550,24 @@ async def _verify_candidate(db, cfg, task):
                 )
                 email = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
                 link = re.search(r"https?://[^\s，。；;]+", text)
-                concrete = re.search(
-                    r"(网申系统|报名系统|招聘系统|投递邮箱|报名邮箱|报名链接|网申链接|报名地址|现场报名|扫码报名)",
+                action_email = re.search(
+                    r"(?:简历|报名|申请|投递|材料)[^。；\n]{0,30}(?:发送|投递|发至|发送至|至)[^。；\n]{0,20}"
+                    r"(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|邮箱)"
+                    r"|(?:发送|投递|发至|发送至)[^。；\n]{0,20}(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|邮箱)",
+                    text,
+                )
+                action_link = re.search(
+                    r"(?:通过|登录|访问|进入|点击|使用)[^。；\n]{0,20}https?://[^\s，。；;]+"
+                    r"|https?://[^\s，。；;]+[^。；\n]{0,20}(?:报名|申请|投递|网申)",
+                    text,
+                )
+                action_system = re.search(
+                    r"(?:通过|登录|访问|进入|使用|前往)[^。；\n]{0,20}"
+                    r"(?:网申系统|报名系统|招聘系统|报名链接|网申链接|报名地址|现场报名|扫码报名)",
+                    text,
+                )
+                consultation = re.search(
+                    r"咨询邮箱|仅接受咨询|不接收简历|集团概况|公司介绍|关于我们|联系我们|政策引用|页脚",
                     text,
                 )
                 if re.search(r"无需报名|不适用", text):
@@ -540,9 +575,19 @@ async def _verify_candidate(db, cfg, task):
                 elif future:
                     verification["application"] = "needs_review"
                     detail["application_reason"] = "公告为预告或报名方式尚未公布"
-                elif email or link or concrete:
+                elif action_email or action_link or action_system:
                     verification["application"] = "found"
-                    detail["application_quote"] = (email or link or concrete).group()
+                    match = action_email or action_link or action_system
+                    start = max(0, match.start() - 40)
+                    end = min(len(text), match.end() + 40)
+                    detail["application_quote"] = text[start:end].strip()
+                elif email or link or re.search(r"报名系统|网申系统|招聘系统", text):
+                    verification["application"] = "needs_review"
+                    detail["application_reason"] = (
+                        "仅发现咨询/介绍邮箱、链接或孤立系统词，未绑定报名操作"
+                        if consultation
+                        else "未发现报名操作与目标绑定"
+                    )
                 else:
                     verification["application"] = "needs_review"
                     detail["application_reason"] = "未发现可定位的报名入口/邮箱/地址"

@@ -630,3 +630,85 @@ def test_application_not_announced_is_not_found(tmp_path):
         candidate = s.get(SourceCandidate, cid)
         assert candidate.status == "readable"
         assert candidate.detail_result["verification"]["application"] == "needs_review"
+
+
+def test_explicit_scope_downgrade_and_reconfirm_round_trip(tmp_path):
+    from soe_radar.models import SourceEmployerScope
+
+    cfg = task_settings(tmp_path)
+    db = initialize(cfg)
+    with db.session() as s:
+        child = Employer(name="示例子公司有限公司", org_type="soe", proof_url="https://example.org/about")
+        s.add(child)
+        s.flush()
+        child_id = child.id
+    values = dict(
+        source_id="group",
+        employer_name="示例子公司有限公司",
+        evidence_url="https://example.org/2027",
+        cohorts=[2027],
+        batch_scope="2027秋招",
+    )
+    scope_id = add_source_scope(db, **values, quote="确认范围", status="confirmed")
+    add_source_scope(db, **values, quote="复核撤回", status="needs_review")
+    with db.session() as s:
+        scope = s.get(SourceEmployerScope, scope_id)
+        assert scope.status == "needs_review"
+        assert any(record["status"] == "confirmed" for record in scope.provenance)
+    child = next(row for row in coverage_report(db, cfg, cohort=2027)["items"] if row["id"] == child_id)
+    assert child["sources"] == []
+    add_source_scope(db, **values, quote="重新确认", status="confirmed")
+    with db.session() as s:
+        assert s.get(SourceEmployerScope, scope_id).status == "confirmed"
+    child = next(row for row in coverage_report(db, cfg, cohort=2027)["items"] if row["id"] == child_id)
+    assert [source["id"] for source in child["sources"]] == ["group"]
+
+
+def test_application_requires_action_bound_to_target(tmp_path):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    cfg = task_settings(tmp_path)
+    db = initialize(cfg)
+    with db.session() as s:
+        employer = s.scalar(select(Employer))
+    cid = add_source_candidate(
+        db,
+        employer_id=employer.id,
+        employer_name=employer.name,
+        url="https://example.org/jobs",
+        discovery_method="official_site_nav",
+        identity_evidence="https://example.org/about",
+    )
+
+    class FakeFetcher:
+        text = ""
+
+        def __init__(self, cfg):
+            pass
+
+        async def page(self, url, source):
+            return SimpleNamespace(title="招聘", text="列表", via="http")
+
+        def candidates(self, page, source):
+            return [("https://example.org/notice", "2027校园招聘公告")]
+
+        async def document(self, url, source, title):
+            return SimpleNamespace(title=title, text=self.text, published_at=None, attachments=[])
+
+        async def close(self):
+            pass
+
+    for text, expected in [
+        ("咨询邮箱：help@example.org（仅接受咨询，不接收简历）。", "needs_review"),
+        ("集团概况：https://example.org/about。没有提供申请路径。", "needs_review"),
+        ("请将简历发送至 hr@example.org 完成报名。", "found"),
+        ("请通过 https://apply.example.org 提交申请。", "found"),
+    ]:
+        FakeFetcher.text = text
+        with patch("soe_radar.coverage_tasks.Fetcher", FakeFetcher):
+            asyncio.run(_verify_candidate(db, cfg, SimpleNamespace(scope_id=cid)))
+        with db.session() as s:
+            row = s.get(SourceCandidate, cid)
+            assert row.detail_result["verification"]["application"] == expected
