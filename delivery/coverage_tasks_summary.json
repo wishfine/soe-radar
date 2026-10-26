@@ -1,19 +1,19 @@
 {
-  "total": 690,
+  "total": 717,
   "by_status": {
-    "needs_review": 73,
-    "blocked": 161,
-    "pending": 367,
-    "done": 89
+    "needs_review": 92,
+    "blocked": 188,
+    "pending": 315,
+    "done": 122
   },
   "by_action": {
     "discover_registry": 28,
     "discover_entry": 448,
-    "verify_candidate": 214
+    "verify_candidate": 241
   },
   "by_priority": {
     "P0": 3,
-    "P1": 463,
+    "P1": 490,
     "P2": 224
   },
   "note": "任务只表示待查/待验证，不表示覆盖完成；候选来源默认不计入有效监测。"
