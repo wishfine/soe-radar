@@ -1,0 +1,6 @@
+{"probe": "older_alias_confirmation_does_not_override_later_withdrawal", "expected": "needs_review", "actual": "confirmed", "passes": false}
+{"probe": "merge_does_not_restore_withdrawn_monitoring", "expected": [], "actual": ["group"], "passes": false}
+{"probe": "partial_withdrawal_preserves_other_confirmed_cohort", "expected": [2028], "actual": [2028], "passes": true}
+{"probe": "partial_withdrawal_keeps_remaining_scope_confirmed", "expected": "confirmed", "actual": "confirmed", "passes": true}
+{"probe": "visit_about_page_does_not_verify_application_path", "expected": "readable", "actual": "verified", "passes": false}
+{"probe": "do_not_send_resume_does_not_verify_application_path", "expected": "readable", "actual": "verified", "passes": false}

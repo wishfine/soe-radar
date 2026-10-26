@@ -119,6 +119,12 @@ uv run python delivery/review_scope_audit_repro.py
 
 累计 34 个探针（14 历史 + 8 CQ + 6 F + 6 G）全部通过；`uv run pytest -q` 176 passed；58 个证据文件哈希全部 OK。
 
+## G1–G2 跟进
+
+- G1：审核记录新增 `decided_at`，范围合并按时间排序而不是输入数组顺序；旧别名 confirmed 不会覆盖之后的撤回，撤回后报告不返回共享入口。部分届别撤回仍保留其他 confirmed 届别。
+- G2：报名判断改为目标局部语义；访问公司介绍页、咨询邮箱、请勿投递等否定句不通过；“请将简历发送至某邮箱”“通过某 URL 提交申请”等动作+目标绑定仍通过，并保存完整上下文与目标。
+- 复现：`review_scope_audit_followup_repro.py` 6 个探针全部通过；累计 40 个探针（14 历史 + 8 CQ + 6 F + 6 G + 6 跟进）全部通过；`uv run pytest -q` 177 passed。
+
 ## 报告口径更正
 
 - 本轮净新增校招机会改为 **28 条**（55→83），其中 2027 届 12 条；`activity_diff.json` 可复核 ID 差集。此前“33 条”是未排除山西结果公示前的旧口径。
