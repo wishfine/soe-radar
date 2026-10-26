@@ -1,0 +1,3 @@
+{"probe": "all_conflicting_legacy_cohorts_are_excluded", "expected": [2029], "actual": [2029], "passes": true}
+{"probe": "neither_conflicting_cohort_is_monitored", "expected": [], "actual": [], "passes": true}
+{"probe": "nonconflicting_cohort_remains_monitored", "expected": ["group"], "actual": ["group"], "passes": true}

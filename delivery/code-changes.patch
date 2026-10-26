@@ -3406,10 +3406,10 @@ index cc7b92f..435812b 100644
                              attachment["url"],
 diff --git a/src/soe_radar/identity.py b/src/soe_radar/identity.py
 new file mode 100644
-index 0000000..b8c2cd9
+index 0000000..9ea7764
 --- /dev/null
 +++ b/src/soe_radar/identity.py
-@@ -0,0 +1,340 @@
+@@ -0,0 +1,342 @@
 +"""Merge display-name variants into one employer identity without losing history."""
 +
 +from __future__ import annotations
@@ -3596,24 +3596,26 @@ index 0000000..b8c2cd9
 +        legacy = any(not record.get("decided_at") for record in records)
 +        if legacy:
 +            cohorts = {cohort for record in records for cohort in (record.get("cohorts") or [])}
-+            for cohort in cohorts:
++            conflicts = []
++            for cohort in sorted(cohorts):
 +                statuses = {
 +                    record.get("status") for record in records if cohort in (record.get("cohorts") or [])
 +                }
 +                if {"confirmed", "needs_review"} <= statuses:
-+                    records.append(
-+                        {
-+                            "url": "",
-+                            "quote": "旧记录缺少审核时间，确认与撤回冲突，保留待复核",
-+                            "cohorts": [cohort],
-+                            "batch_scope": scope.batch_scope,
-+                            "status": "needs_review",
-+                            "decided_at": stamp(),
-+                            "verified_at": None,
-+                            "merge_conflict": True,
-+                        }
-+                    )
-+                    break
++                    conflicts.append(cohort)
++            if conflicts:
++                records.append(
++                    {
++                        "url": "",
++                        "quote": "旧记录缺少审核时间，确认与撤回冲突，保留待复核",
++                        "cohorts": conflicts,
++                        "batch_scope": scope.batch_scope,
++                        "status": "needs_review",
++                        "decided_at": stamp(),
++                        "verified_at": None,
++                        "merge_conflict": True,
++                    }
++                )
 +        records = sorted(
 +            enumerate(records),
 +            key=lambda item: (
@@ -4702,10 +4704,10 @@ index 6b86c9b..d85a1a7 100644
 +    assert repair_registry_snapshots(db, apply=False) == []
 diff --git a/tests/test_coverage_tasks.py b/tests/test_coverage_tasks.py
 new file mode 100644
-index 0000000..3cdf2d5
+index 0000000..f53e586
 --- /dev/null
 +++ b/tests/test_coverage_tasks.py
-@@ -0,0 +1,873 @@
+@@ -0,0 +1,933 @@
 +from datetime import UTC, datetime, timedelta
 +
 +from sqlalchemy import select
@@ -5579,6 +5581,66 @@ index 0000000..3cdf2d5
 +        assert row.status == "verified"
 +        assert row.detail_result["verification"]["application"] == "found"
 +        assert row.detail_result["application_target"] == "hr@example.org"
++
++
++def test_legacy_merge_isolates_all_conflicting_cohorts(tmp_path):
++    from soe_radar.identity import merge_alias_employers
++    from soe_radar.models import SourceEmployerScope
++
++    cfg = task_settings(tmp_path)
++    db = initialize(cfg)
++    canonical = "示例单位有限公司"
++    alias = "示例单位有限公司[示例单位别称]"
++    with db.session() as s:
++        target = Employer(name=canonical, org_type="soe", proof_url="https://example.org/about")
++        s.add_all([target, Employer(name=alias)])
++        s.flush()
++        target_id = target.id
++    base = dict(source_id="group", batch_scope="统一校招")
++    add_source_scope(
++        db,
++        **base,
++        employer_name=alias,
++        evidence_url="https://example.org/old",
++        quote="旧别名确认三届",
++        cohorts=[2027, 2028, 2029],
++        status="confirmed",
++    )
++    scope_id = add_source_scope(
++        db,
++        **base,
++        employer_name=canonical,
++        evidence_url="https://example.org/new",
++        quote="规范名确认三届",
++        cohorts=[2027, 2028, 2029],
++        status="confirmed",
++    )
++    add_source_scope(
++        db,
++        **base,
++        employer_name=canonical,
++        evidence_url="https://example.org/new",
++        quote="撤回2027和2028",
++        cohorts=[2027, 2028],
++        status="needs_review",
++    )
++    with db.session() as s:
++        for row in s.scalars(select(SourceEmployerScope)):
++            row.provenance = [
++                {key: value for key, value in record.items() if key != "decided_at"}
++                for record in row.provenance
++            ]
++            from soe_radar.coverage_tasks import recompute_scope
++
++            recompute_scope(row)
++    merge_alias_employers(db, apply=True)
++    with db.session() as s:
++        assert s.get(SourceEmployerScope, scope_id).cohorts == [2029]
++    for cohort in (2027, 2028):
++        item = next(row for row in coverage_report(db, cfg, cohort=cohort)["items"] if row["id"] == target_id)
++        assert item["sources"] == []
++    item = next(row for row in coverage_report(db, cfg, cohort=2029)["items"] if row["id"] == target_id)
++    assert [source["id"] for source in item["sources"]] == ["group"]
 diff --git a/tests/test_delivery.py b/tests/test_delivery.py
 new file mode 100644
 index 0000000..a933f76

@@ -205,7 +205,7 @@
 测试与构建：
 
 ```text
-uv run pytest -q            → 179 passed, 1 warning
+uv run pytest -q            → 180 passed, 1 warning
 ruff check src tests        → All checks passed
 ruff format --check src tests → 50 files already formatted
 uv build                    → sdist + wheel 成功
@@ -322,6 +322,12 @@ unresolved_binding_does_not_export_guessed_evidence: true
 - G1：旧记录缺少 `decided_at` 时，不再用数组顺序推断最新；同一届别 confirmed/needs_review 冲突追加待复核记录，保持 needs_review。
 - G2：报名证据按目标所在语句/分句判断；访问岗位介绍页、咨询邮箱、否定投递句不通过；同文多邮箱时按局部语义选择真实投递目标；报名未公布时保持 readable。
 - 复现：`review_scope_legacy_repro.py` 3 个探针通过；累计 43 个探针全部通过。
+
+## 7.9 旧范围多届别冲突
+
+- 合并旧 provenance 时收集全部冲突届别，不再只处理第一个；一条待复核记录覆盖所有冲突届别，无冲突届别保持 confirmed。
+- 2027/2028 撤回、2029 保持确认的场景合并后为 `[2029]`，2027/2028 不计监测，2029 仍监测。
+- 复现：`review_scope_multi_cohort_repro.py` 3 个探针通过；累计 46 个探针全部通过。
 
 ## 8. 尚未解决的主要缺口
 

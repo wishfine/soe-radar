@@ -131,6 +131,12 @@ uv run python delivery/review_scope_audit_repro.py
 - G2：报名判断改为按目标所在语句/分句识别动作、用途、否定和未来条件；访问岗位介绍页、咨询邮箱、否定投递句不通过；同文咨询邮箱 + 真实投递邮箱时选择真实目标 `hr@example.org` 并 verified；报名未公布时访问岗位页保持 readable。
 - 复现：`review_scope_legacy_repro.py` 3 个探针全部通过；累计 43 个探针（14 历史 + 8 CQ + 6 F + 6 G + 6 跟进 + 3 升级）全部通过；`uv run pytest -q` 179 passed。
 
+## 旧范围多届别冲突修复
+
+- `_merge_scope` 不再在首个冲突届别后 `break`；一次收集全部冲突届别，写入一条完整 `merge_conflict` 待复核记录。
+- 旧别名确认 2027/2028/2029、规范名撤回 2027/2028 时，合并后有效范围仅 `[2029]`；2027/2028 报告不返回共享入口，2029 仍监测。
+- 复现：`review_scope_multi_cohort_repro.py` 3 个探针全部通过；累计 46 个探针（14 历史 + 8 CQ + 6 F + 6 G + 6 跟进 + 3 升级 + 3 多届别）全部通过；`uv run pytest -q` 180 passed。
+
 ## 报告口径更正
 
 - 本轮净新增校招机会改为 **28 条**（55→83），其中 2027 届 12 条；`activity_diff.json` 可复核 ID 差集。此前“33 条”是未排除山西结果公示前的旧口径。
