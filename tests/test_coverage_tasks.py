@@ -760,3 +760,114 @@ def test_scope_merge_uses_decision_timestamp_not_input_order(tmp_path):
         assert row.status == "needs_review"
     child = next(row for row in coverage_report(db, cfg, cohort=2027)["items"] if row["id"] == target_id)
     assert child["sources"] == []
+
+
+def test_legacy_scope_without_decided_at_conflicts_as_needs_review(tmp_path):
+    from soe_radar.identity import merge_alias_employers
+    from soe_radar.models import SourceEmployerScope
+
+    cfg = task_settings(tmp_path)
+    db = initialize(cfg)
+    canonical = "示例单位有限公司"
+    alias = "示例单位有限公司[示例单位别称]"
+    with db.session() as s:
+        target = Employer(name=canonical, org_type="soe", proof_url="https://example.org/about")
+        s.add_all([target, Employer(name=alias)])
+        s.flush()
+        target_id = target.id
+    base = dict(source_id="group", cohorts=[2027], batch_scope="2027秋招")
+    add_source_scope(
+        db,
+        **base,
+        employer_name=alias,
+        evidence_url="https://example.org/old",
+        quote="旧别名确认",
+        status="confirmed",
+    )
+    scope_id = add_source_scope(
+        db,
+        **base,
+        employer_name=canonical,
+        evidence_url="https://example.org/new",
+        quote="规范名确认",
+        status="confirmed",
+    )
+    add_source_scope(
+        db,
+        **base,
+        employer_name=canonical,
+        evidence_url="https://example.org/new",
+        quote="较晚撤回",
+        status="needs_review",
+    )
+    with db.session() as s:
+        for row in s.scalars(select(SourceEmployerScope)):
+            row.provenance = [
+                {key: value for key, value in record.items() if key != "decided_at"}
+                for record in row.provenance
+            ]
+            from soe_radar.coverage_tasks import recompute_scope
+
+            recompute_scope(row)
+    merge_alias_employers(db, apply=True)
+    with db.session() as s:
+        assert s.get(SourceEmployerScope, scope_id).status == "needs_review"
+    child = next(row for row in coverage_report(db, cfg, cohort=2027)["items"] if row["id"] == target_id)
+    assert child["sources"] == []
+
+
+def test_application_sentence_context_and_mixed_emails(tmp_path):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    cfg = task_settings(tmp_path)
+    db = initialize(cfg)
+    with db.session() as s:
+        employer = s.scalar(select(Employer))
+    cid = add_source_candidate(
+        db,
+        employer_id=employer.id,
+        employer_name=employer.name,
+        url="https://example.org/jobs",
+        discovery_method="official_site_nav",
+        identity_evidence="https://example.org/about",
+    )
+
+    class FakeFetcher:
+        text = ""
+
+        def __init__(self, cfg):
+            pass
+
+        async def page(self, url, source):
+            return SimpleNamespace(title="招聘", text="列表", via="http")
+
+        def candidates(self, page, source):
+            return [("https://example.org/notice", "2027校园招聘公告")]
+
+        async def document(self, url, source, title):
+            return SimpleNamespace(title=title, text=self.text, published_at=None, attachments=[])
+
+        async def close(self):
+            pass
+
+    FakeFetcher.text = (
+        "2027校园招聘岗位介绍。报名入口尚未公布；请访问 https://example.org/jobs 查看招聘岗位；"
+        "网申开放时间另行通知。"
+    )
+    with patch("soe_radar.coverage_tasks.Fetcher", FakeFetcher):
+        asyncio.run(_verify_candidate(db, cfg, SimpleNamespace(scope_id=cid)))
+    with db.session() as s:
+        assert s.get(SourceCandidate, cid).status == "readable"
+
+    FakeFetcher.text = (
+        "咨询邮箱：help@example.org，仅供咨询，不接收简历。请将简历发送至 hr@example.org 完成报名。"
+    )
+    with patch("soe_radar.coverage_tasks.Fetcher", FakeFetcher):
+        asyncio.run(_verify_candidate(db, cfg, SimpleNamespace(scope_id=cid)))
+    with db.session() as s:
+        row = s.get(SourceCandidate, cid)
+        assert row.status == "verified"
+        assert row.detail_result["verification"]["application"] == "found"
+        assert row.detail_result["application_target"] == "hr@example.org"

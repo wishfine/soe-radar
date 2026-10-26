@@ -276,7 +276,14 @@ def scope_evidence(scope):
 def recompute_scope(scope):
     """Current review state is the latest timestamped decision per cohort."""
     records = scope_evidence(scope)
-    records = sorted(enumerate(records), key=lambda item: (item[1].get("decided_at") or "", item[0]))
+    records = sorted(
+        enumerate(records),
+        key=lambda item: (
+            0 if not item[1].get("decided_at") else 1,
+            item[1].get("decided_at") or "",
+            item[0],
+        ),
+    )
     records = [record for _, record in records]
     decisions = {}
     latest_record = records[-1] if records else {}
@@ -549,9 +556,13 @@ async def _verify_candidate(db, cfg, task):
                     "statuses": attachment_statuses,
                 }
 
-                def local(match):
-                    start_at = max(0, match.start() - 70)
-                    end_at = min(len(text), match.end() + 70)
+                delimiters = "。；;\n！？"
+
+                def sentence(match):
+                    start_at = max(text.rfind(d, 0, match.start()) for d in delimiters) + 1
+                    ends = [text.find(d, match.end()) for d in delimiters]
+                    ends = [value for value in ends if value >= 0]
+                    end_at = min(ends) if ends else len(text)
                     return text[start_at:end_at]
 
                 def negative(context):
@@ -562,39 +573,47 @@ async def _verify_candidate(db, cfg, task):
                         )
                     )
 
-                future = re.search(
-                    r"另行通知|暂未公布|尚未公布|待公布|请关注后续|仅为预告|预告|报名入口.{0,10}(?:暂未|未开放)|未开放报名",
-                    text,
-                )
+                def future(context):
+                    return bool(
+                        re.search(
+                            r"另行通知|暂未公布|尚未公布|待公布|请关注后续|仅为预告|预告|报名入口.{0,10}(?:暂未|未开放)|未开放报名",
+                            context,
+                        )
+                    )
+
                 email_pattern = r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
+                url_pattern = r"https?://[^\s，。；;]+"
                 action_email = None
-                for candidate_match in re.finditer(
-                    rf"(?:简历|报名|申请|投递|材料)[^。；\n]{{0,30}}"
-                    rf"(?:发送|投递|发至|发送至|至)[^。；\n]{{0,20}}(?:{email_pattern}|邮箱)"
-                    rf"|(?:发送|投递|发至|发送至)[^。；\n]{{0,20}}(?:{email_pattern}|邮箱)",
-                    text,
-                ):
-                    if not negative(local(candidate_match)):
+                for candidate_match in re.finditer(email_pattern, text):
+                    context = sentence(candidate_match)
+                    if negative(context) or future(context):
+                        continue
+                    if re.search(
+                        r"(?:简历|报名|申请|投递|材料)[^。；\n]{0,30}(?:发送|投递|发至|发送至|至)"
+                        r"|(?:发送|投递|发至|发送至)[^。；\n]{0,20}(?:邮箱|简历)",
+                        context,
+                    ):
                         action_email = candidate_match
                         break
                 action_link = None
-                for candidate_match in re.finditer(
-                    r"(?:通过|登录|访问|进入|点击|使用)[^。；\n]{0,20}https?://[^\s，。；;]+"
-                    r"|https?://[^\s，。；;]+[^。；\n]{0,20}(?:报名|申请|投递|网申|提交)"
-                    r"|(?:报名|申请|投递|网申|提交)[^。；\n]{0,20}https?://[^\s，。；;]+",
-                    text,
-                ):
-                    context = local(candidate_match)
-                    if re.search(r"(?:报名|申请|投递|网申|提交)", context) and not negative(context):
+                for candidate_match in re.finditer(url_pattern, text):
+                    context = sentence(candidate_match)
+                    if negative(context) or future(context):
+                        continue
+                    if re.search(
+                        r"(?:通过|登录|访问|进入|点击|使用|提交|申请|报名|投递|网申)", context
+                    ) and re.search(r"(?:报名|申请|投递|网申|提交)", context):
                         action_link = candidate_match
                         break
                 action_system = None
                 for candidate_match in re.finditer(
-                    r"(?:通过|登录|访问|进入|使用|前往)[^。；\n]{0,20}"
                     r"(?:网申系统|报名系统|招聘系统|报名链接|网申链接|报名地址|现场报名|扫码报名)",
                     text,
                 ):
-                    if not negative(local(candidate_match)):
+                    context = sentence(candidate_match)
+                    if negative(context) or future(context):
+                        continue
+                    if re.search(r"(?:通过|登录|访问|进入|使用|前往|提交|报名)", context):
                         action_system = candidate_match
                         break
                 if re.search(r"无需报名|不适用", text):
@@ -602,16 +621,17 @@ async def _verify_candidate(db, cfg, task):
                 elif action_email or action_link or action_system:
                     verification["application"] = "found"
                     match = action_email or action_link or action_system
-                    detail["application_quote"] = local(match).strip()
-                    target_match = re.search(rf"{email_pattern}|https?://[^\s，。；;]+", match.group())
-                    detail["application_target"] = target_match.group() if target_match else match.group()
-                elif future:
+                    detail["application_quote"] = sentence(match).strip()
+                    detail["application_target"] = match.group()
+                elif re.search(
+                    r"另行通知|暂未公布|尚未公布|待公布|请关注后续|仅为预告|预告|未开放报名", text
+                ):
                     verification["application"] = "needs_review"
                     detail["application_reason"] = "公告为预告或报名方式尚未公布"
-                elif email_pattern and re.search(email_pattern, text):
+                elif re.search(email_pattern, text):
                     verification["application"] = "needs_review"
                     detail["application_reason"] = "邮箱未绑定明确、肯定的投递动作"
-                elif re.search(r"https?://", text):
+                elif re.search(url_pattern, text):
                     verification["application"] = "needs_review"
                     detail["application_reason"] = "链接未绑定报名/申请/投递动作"
                 else:

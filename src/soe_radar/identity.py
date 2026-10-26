@@ -17,6 +17,7 @@ from .models import (
     Relationship,
     SourceCandidate,
     SourceEmployerScope,
+    stamp,
 )
 
 
@@ -180,7 +181,36 @@ def _merge_scope(session, scope, target):
         for record in scope_evidence(scope):
             if record not in records:
                 records.append(record)
-        existing.provenance = records
+        legacy = any(not record.get("decided_at") for record in records)
+        if legacy:
+            cohorts = {cohort for record in records for cohort in (record.get("cohorts") or [])}
+            for cohort in cohorts:
+                statuses = {
+                    record.get("status") for record in records if cohort in (record.get("cohorts") or [])
+                }
+                if {"confirmed", "needs_review"} <= statuses:
+                    records.append(
+                        {
+                            "url": "",
+                            "quote": "旧记录缺少审核时间，确认与撤回冲突，保留待复核",
+                            "cohorts": [cohort],
+                            "batch_scope": scope.batch_scope,
+                            "status": "needs_review",
+                            "decided_at": stamp(),
+                            "verified_at": None,
+                            "merge_conflict": True,
+                        }
+                    )
+                    break
+        records = sorted(
+            enumerate(records),
+            key=lambda item: (
+                0 if not item[1].get("decided_at") else 1,
+                item[1].get("decided_at") or "",
+                item[0],
+            ),
+        )
+        existing.provenance = [record for _, record in records]
         recompute_scope(existing)
         session.delete(scope)
         return
