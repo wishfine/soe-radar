@@ -1287,10 +1287,10 @@ index 19dba35..2860e11 100644
      }
 diff --git a/src/soe_radar/coverage_tasks.py b/src/soe_radar/coverage_tasks.py
 new file mode 100644
-index 0000000..0569124
+index 0000000..d414b27
 --- /dev/null
 +++ b/src/soe_radar/coverage_tasks.py
-@@ -0,0 +1,849 @@
+@@ -0,0 +1,894 @@
 +"""Idempotent coverage task planning and bounded execution."""
 +
 +from __future__ import annotations
@@ -1566,17 +1566,36 @@ index 0000000..0569124
 +
 +
 +def recompute_scope(scope):
++    """Current review state is the latest decision per cohort; history stays in provenance."""
 +    records = scope_evidence(scope)
-+    confirmed = [record for record in records if record.get("status") == "confirmed"]
-+    primary = (confirmed or records)[-1] if records else {}
-+    scope.provenance = records
-+    scope.status = "confirmed" if confirmed else "needs_review"
-+    scope.cohorts = sorted(
-+        {cohort for record in (confirmed or records) for cohort in (record.get("cohorts") or [])}
++    decisions = {}
++    latest_record = records[-1] if records else {}
++    for record in records:
++        for cohort in record.get("cohorts") or []:
++            decisions[cohort] = record
++    confirmed_cohorts = sorted(
++        cohort for cohort, record in decisions.items() if record.get("status") == "confirmed"
 +    )
++    confirmed_records = [record for record in records if record.get("status") == "confirmed"]
++    if confirmed_cohorts:
++        primary = next(
++            record
++            for record in reversed(records)
++            if record.get("status") == "confirmed"
++            and set(record.get("cohorts") or []) & set(confirmed_cohorts)
++        )
++        scope.status = "confirmed"
++        scope.cohorts = confirmed_cohorts
++    else:
++        primary = latest_record
++        scope.status = "needs_review"
++        scope.cohorts = sorted({cohort for record in records for cohort in (record.get("cohorts") or [])})
++    scope.provenance = records
 +    scope.quote = primary.get("quote", "")
 +    scope.evidence_url = primary.get("url", "")
-+    scope.verified_at = primary.get("verified_at") if confirmed else None
++    scope.verified_at = (
++        primary.get("verified_at") if confirmed_records and scope.status == "confirmed" else None
++    )
 +
 +
 +def add_source_scope(
@@ -1824,8 +1843,24 @@ index 0000000..0569124
 +                )
 +                email = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
 +                link = re.search(r"https?://[^\s，。；;]+", text)
-+                concrete = re.search(
-+                    r"(网申系统|报名系统|招聘系统|投递邮箱|报名邮箱|报名链接|网申链接|报名地址|现场报名|扫码报名)",
++                action_email = re.search(
++                    r"(?:简历|报名|申请|投递|材料)[^。；\n]{0,30}(?:发送|投递|发至|发送至|至)[^。；\n]{0,20}"
++                    r"(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|邮箱)"
++                    r"|(?:发送|投递|发至|发送至)[^。；\n]{0,20}(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|邮箱)",
++                    text,
++                )
++                action_link = re.search(
++                    r"(?:通过|登录|访问|进入|点击|使用)[^。；\n]{0,20}https?://[^\s，。；;]+"
++                    r"|https?://[^\s，。；;]+[^。；\n]{0,20}(?:报名|申请|投递|网申)",
++                    text,
++                )
++                action_system = re.search(
++                    r"(?:通过|登录|访问|进入|使用|前往)[^。；\n]{0,20}"
++                    r"(?:网申系统|报名系统|招聘系统|报名链接|网申链接|报名地址|现场报名|扫码报名)",
++                    text,
++                )
++                consultation = re.search(
++                    r"咨询邮箱|仅接受咨询|不接收简历|集团概况|公司介绍|关于我们|联系我们|政策引用|页脚",
 +                    text,
 +                )
 +                if re.search(r"无需报名|不适用", text):
@@ -1833,9 +1868,19 @@ index 0000000..0569124
 +                elif future:
 +                    verification["application"] = "needs_review"
 +                    detail["application_reason"] = "公告为预告或报名方式尚未公布"
-+                elif email or link or concrete:
++                elif action_email or action_link or action_system:
 +                    verification["application"] = "found"
-+                    detail["application_quote"] = (email or link or concrete).group()
++                    match = action_email or action_link or action_system
++                    start = max(0, match.start() - 40)
++                    end = min(len(text), match.end() + 40)
++                    detail["application_quote"] = text[start:end].strip()
++                elif email or link or re.search(r"报名系统|网申系统|招聘系统", text):
++                    verification["application"] = "needs_review"
++                    detail["application_reason"] = (
++                        "仅发现咨询/介绍邮箱、链接或孤立系统词，未绑定报名操作"
++                        if consultation
++                        else "未发现报名操作与目标绑定"
++                    )
 +                else:
 +                    verification["application"] = "needs_review"
 +                    detail["application_reason"] = "未发现可定位的报名入口/邮箱/地址"
@@ -4581,10 +4626,10 @@ index 6b86c9b..d85a1a7 100644
 +    assert repair_registry_snapshots(db, apply=False) == []
 diff --git a/tests/test_coverage_tasks.py b/tests/test_coverage_tasks.py
 new file mode 100644
-index 0000000..d790ee6
+index 0000000..fcdf36d
 --- /dev/null
 +++ b/tests/test_coverage_tasks.py
-@@ -0,0 +1,632 @@
+@@ -0,0 +1,714 @@
 +from datetime import UTC, datetime, timedelta
 +
 +from sqlalchemy import select
@@ -5217,6 +5262,88 @@ index 0000000..d790ee6
 +        candidate = s.get(SourceCandidate, cid)
 +        assert candidate.status == "readable"
 +        assert candidate.detail_result["verification"]["application"] == "needs_review"
++
++
++def test_explicit_scope_downgrade_and_reconfirm_round_trip(tmp_path):
++    from soe_radar.models import SourceEmployerScope
++
++    cfg = task_settings(tmp_path)
++    db = initialize(cfg)
++    with db.session() as s:
++        child = Employer(name="示例子公司有限公司", org_type="soe", proof_url="https://example.org/about")
++        s.add(child)
++        s.flush()
++        child_id = child.id
++    values = dict(
++        source_id="group",
++        employer_name="示例子公司有限公司",
++        evidence_url="https://example.org/2027",
++        cohorts=[2027],
++        batch_scope="2027秋招",
++    )
++    scope_id = add_source_scope(db, **values, quote="确认范围", status="confirmed")
++    add_source_scope(db, **values, quote="复核撤回", status="needs_review")
++    with db.session() as s:
++        scope = s.get(SourceEmployerScope, scope_id)
++        assert scope.status == "needs_review"
++        assert any(record["status"] == "confirmed" for record in scope.provenance)
++    child = next(row for row in coverage_report(db, cfg, cohort=2027)["items"] if row["id"] == child_id)
++    assert child["sources"] == []
++    add_source_scope(db, **values, quote="重新确认", status="confirmed")
++    with db.session() as s:
++        assert s.get(SourceEmployerScope, scope_id).status == "confirmed"
++    child = next(row for row in coverage_report(db, cfg, cohort=2027)["items"] if row["id"] == child_id)
++    assert [source["id"] for source in child["sources"]] == ["group"]
++
++
++def test_application_requires_action_bound_to_target(tmp_path):
++    import asyncio
++    from types import SimpleNamespace
++    from unittest.mock import patch
++
++    cfg = task_settings(tmp_path)
++    db = initialize(cfg)
++    with db.session() as s:
++        employer = s.scalar(select(Employer))
++    cid = add_source_candidate(
++        db,
++        employer_id=employer.id,
++        employer_name=employer.name,
++        url="https://example.org/jobs",
++        discovery_method="official_site_nav",
++        identity_evidence="https://example.org/about",
++    )
++
++    class FakeFetcher:
++        text = ""
++
++        def __init__(self, cfg):
++            pass
++
++        async def page(self, url, source):
++            return SimpleNamespace(title="招聘", text="列表", via="http")
++
++        def candidates(self, page, source):
++            return [("https://example.org/notice", "2027校园招聘公告")]
++
++        async def document(self, url, source, title):
++            return SimpleNamespace(title=title, text=self.text, published_at=None, attachments=[])
++
++        async def close(self):
++            pass
++
++    for text, expected in [
++        ("咨询邮箱：help@example.org（仅接受咨询，不接收简历）。", "needs_review"),
++        ("集团概况：https://example.org/about。没有提供申请路径。", "needs_review"),
++        ("请将简历发送至 hr@example.org 完成报名。", "found"),
++        ("请通过 https://apply.example.org 提交申请。", "found"),
++    ]:
++        FakeFetcher.text = text
++        with patch("soe_radar.coverage_tasks.Fetcher", FakeFetcher):
++            asyncio.run(_verify_candidate(db, cfg, SimpleNamespace(scope_id=cid)))
++        with db.session() as s:
++            row = s.get(SourceCandidate, cid)
++            assert row.detail_result["verification"]["application"] == expected
 diff --git a/tests/test_delivery.py b/tests/test_delivery.py
 new file mode 100644
 index 0000000..a933f76

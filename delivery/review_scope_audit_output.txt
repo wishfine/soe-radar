@@ -1,0 +1,6 @@
+{"probe": "explicit_scope_downgrade_controls_current_status", "expected": "needs_review", "actual": "confirmed", "passes": false}
+{"probe": "downgraded_scope_is_excluded_from_monitoring", "expected": [], "actual": ["group"], "passes": false}
+{"probe": "consultation_email_is_not_application_path", "expected": "needs_review", "actual": "found", "passes": false}
+{"probe": "consultation_email_does_not_fully_verify_candidate", "expected": "readable", "actual": "verified", "passes": false}
+{"probe": "company_about_url_is_not_application_path", "expected": "needs_review", "actual": "found", "passes": false}
+{"probe": "company_about_url_does_not_fully_verify_candidate", "expected": "readable", "actual": "verified", "passes": false}

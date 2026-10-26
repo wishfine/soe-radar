@@ -205,7 +205,7 @@
 测试与构建：
 
 ```text
-uv run pytest -q            → 174 passed, 1 warning
+uv run pytest -q            → 176 passed, 1 warning
 ruff check src tests        → All checks passed
 ruff format --check src tests → 50 files already formatted
 uv build                    → sdist + wheel 成功
@@ -303,6 +303,13 @@ unresolved_binding_does_not_export_guessed_evidence: true
 - F4：报名阶段要求可定位的 URL/邮箱/报名系统/地址；预告、另行通知、暂未公布不判为 found；入口、活动、截止继续分开验收。
 
 复现：`delivery/review_coverage_queue_followup_repro.py` 6 个探针全部通过；旧 14 个 + CQ 8 个探针继续通过。
+
+## 7.6 范围审计与报名路径修复（G1–G2）
+
+- G1：共享范围按“每个届别的最新审核决定”计算当前状态；显式撤回后状态为 needs_review、从有效监测排除，旧 confirmed 原文保留在 provenance；重新确认可恢复。身份合并保留证据顺序，不自动恢复撤回决定。
+- G2：报名阶段要求动作与目标绑定；咨询邮箱、公司介绍 URL、孤立系统词不通过；真实报名邮箱/URL/网申系统/现场地址才判 found，并保存完整上下文。无法确认时保留 readable，不生成截止。
+
+复现：`delivery/review_scope_audit_repro.py` 6 个探针全部通过；累计 34 个探针全部通过。
 
 ## 8. 尚未解决的主要缺口
 
