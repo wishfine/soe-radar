@@ -1287,10 +1287,10 @@ index 19dba35..2860e11 100644
      }
 diff --git a/src/soe_radar/coverage_tasks.py b/src/soe_radar/coverage_tasks.py
 new file mode 100644
-index 0000000..1f260e6
+index 0000000..cade1a0
 --- /dev/null
 +++ b/src/soe_radar/coverage_tasks.py
-@@ -0,0 +1,920 @@
+@@ -0,0 +1,940 @@
 +"""Idempotent coverage task planning and bounded execution."""
 +
 +from __future__ import annotations
@@ -1569,7 +1569,14 @@ index 0000000..1f260e6
 +def recompute_scope(scope):
 +    """Current review state is the latest timestamped decision per cohort."""
 +    records = scope_evidence(scope)
-+    records = sorted(enumerate(records), key=lambda item: (item[1].get("decided_at") or "", item[0]))
++    records = sorted(
++        enumerate(records),
++        key=lambda item: (
++            0 if not item[1].get("decided_at") else 1,
++            item[1].get("decided_at") or "",
++            item[0],
++        ),
++    )
 +    records = [record for _, record in records]
 +    decisions = {}
 +    latest_record = records[-1] if records else {}
@@ -1842,9 +1849,13 @@ index 0000000..1f260e6
 +                    "statuses": attachment_statuses,
 +                }
 +
-+                def local(match):
-+                    start_at = max(0, match.start() - 70)
-+                    end_at = min(len(text), match.end() + 70)
++                delimiters = "。；;\n！？"
++
++                def sentence(match):
++                    start_at = max(text.rfind(d, 0, match.start()) for d in delimiters) + 1
++                    ends = [text.find(d, match.end()) for d in delimiters]
++                    ends = [value for value in ends if value >= 0]
++                    end_at = min(ends) if ends else len(text)
 +                    return text[start_at:end_at]
 +
 +                def negative(context):
@@ -1855,39 +1866,47 @@ index 0000000..1f260e6
 +                        )
 +                    )
 +
-+                future = re.search(
-+                    r"另行通知|暂未公布|尚未公布|待公布|请关注后续|仅为预告|预告|报名入口.{0,10}(?:暂未|未开放)|未开放报名",
-+                    text,
-+                )
++                def future(context):
++                    return bool(
++                        re.search(
++                            r"另行通知|暂未公布|尚未公布|待公布|请关注后续|仅为预告|预告|报名入口.{0,10}(?:暂未|未开放)|未开放报名",
++                            context,
++                        )
++                    )
++
 +                email_pattern = r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
++                url_pattern = r"https?://[^\s，。；;]+"
 +                action_email = None
-+                for candidate_match in re.finditer(
-+                    rf"(?:简历|报名|申请|投递|材料)[^。；\n]{{0,30}}"
-+                    rf"(?:发送|投递|发至|发送至|至)[^。；\n]{{0,20}}(?:{email_pattern}|邮箱)"
-+                    rf"|(?:发送|投递|发至|发送至)[^。；\n]{{0,20}}(?:{email_pattern}|邮箱)",
-+                    text,
-+                ):
-+                    if not negative(local(candidate_match)):
++                for candidate_match in re.finditer(email_pattern, text):
++                    context = sentence(candidate_match)
++                    if negative(context) or future(context):
++                        continue
++                    if re.search(
++                        r"(?:简历|报名|申请|投递|材料)[^。；\n]{0,30}(?:发送|投递|发至|发送至|至)"
++                        r"|(?:发送|投递|发至|发送至)[^。；\n]{0,20}(?:邮箱|简历)",
++                        context,
++                    ):
 +                        action_email = candidate_match
 +                        break
 +                action_link = None
-+                for candidate_match in re.finditer(
-+                    r"(?:通过|登录|访问|进入|点击|使用)[^。；\n]{0,20}https?://[^\s，。；;]+"
-+                    r"|https?://[^\s，。；;]+[^。；\n]{0,20}(?:报名|申请|投递|网申|提交)"
-+                    r"|(?:报名|申请|投递|网申|提交)[^。；\n]{0,20}https?://[^\s，。；;]+",
-+                    text,
-+                ):
-+                    context = local(candidate_match)
-+                    if re.search(r"(?:报名|申请|投递|网申|提交)", context) and not negative(context):
++                for candidate_match in re.finditer(url_pattern, text):
++                    context = sentence(candidate_match)
++                    if negative(context) or future(context):
++                        continue
++                    if re.search(
++                        r"(?:通过|登录|访问|进入|点击|使用|提交|申请|报名|投递|网申)", context
++                    ) and re.search(r"(?:报名|申请|投递|网申|提交)", context):
 +                        action_link = candidate_match
 +                        break
 +                action_system = None
 +                for candidate_match in re.finditer(
-+                    r"(?:通过|登录|访问|进入|使用|前往)[^。；\n]{0,20}"
 +                    r"(?:网申系统|报名系统|招聘系统|报名链接|网申链接|报名地址|现场报名|扫码报名)",
 +                    text,
 +                ):
-+                    if not negative(local(candidate_match)):
++                    context = sentence(candidate_match)
++                    if negative(context) or future(context):
++                        continue
++                    if re.search(r"(?:通过|登录|访问|进入|使用|前往|提交|报名)", context):
 +                        action_system = candidate_match
 +                        break
 +                if re.search(r"无需报名|不适用", text):
@@ -1895,16 +1914,17 @@ index 0000000..1f260e6
 +                elif action_email or action_link or action_system:
 +                    verification["application"] = "found"
 +                    match = action_email or action_link or action_system
-+                    detail["application_quote"] = local(match).strip()
-+                    target_match = re.search(rf"{email_pattern}|https?://[^\s，。；;]+", match.group())
-+                    detail["application_target"] = target_match.group() if target_match else match.group()
-+                elif future:
++                    detail["application_quote"] = sentence(match).strip()
++                    detail["application_target"] = match.group()
++                elif re.search(
++                    r"另行通知|暂未公布|尚未公布|待公布|请关注后续|仅为预告|预告|未开放报名", text
++                ):
 +                    verification["application"] = "needs_review"
 +                    detail["application_reason"] = "公告为预告或报名方式尚未公布"
-+                elif email_pattern and re.search(email_pattern, text):
++                elif re.search(email_pattern, text):
 +                    verification["application"] = "needs_review"
 +                    detail["application_reason"] = "邮箱未绑定明确、肯定的投递动作"
-+                elif re.search(r"https?://", text):
++                elif re.search(url_pattern, text):
 +                    verification["application"] = "needs_review"
 +                    detail["application_reason"] = "链接未绑定报名/申请/投递动作"
 +                else:
@@ -3386,10 +3406,10 @@ index cc7b92f..435812b 100644
                              attachment["url"],
 diff --git a/src/soe_radar/identity.py b/src/soe_radar/identity.py
 new file mode 100644
-index 0000000..0ac1221
+index 0000000..b8c2cd9
 --- /dev/null
 +++ b/src/soe_radar/identity.py
-@@ -0,0 +1,310 @@
+@@ -0,0 +1,340 @@
 +"""Merge display-name variants into one employer identity without losing history."""
 +
 +from __future__ import annotations
@@ -3409,6 +3429,7 @@ index 0000000..0ac1221
 +    Relationship,
 +    SourceCandidate,
 +    SourceEmployerScope,
++    stamp,
 +)
 +
 +
@@ -3572,7 +3593,36 @@ index 0000000..0ac1221
 +        for record in scope_evidence(scope):
 +            if record not in records:
 +                records.append(record)
-+        existing.provenance = records
++        legacy = any(not record.get("decided_at") for record in records)
++        if legacy:
++            cohorts = {cohort for record in records for cohort in (record.get("cohorts") or [])}
++            for cohort in cohorts:
++                statuses = {
++                    record.get("status") for record in records if cohort in (record.get("cohorts") or [])
++                }
++                if {"confirmed", "needs_review"} <= statuses:
++                    records.append(
++                        {
++                            "url": "",
++                            "quote": "旧记录缺少审核时间，确认与撤回冲突，保留待复核",
++                            "cohorts": [cohort],
++                            "batch_scope": scope.batch_scope,
++                            "status": "needs_review",
++                            "decided_at": stamp(),
++                            "verified_at": None,
++                            "merge_conflict": True,
++                        }
++                    )
++                    break
++        records = sorted(
++            enumerate(records),
++            key=lambda item: (
++                0 if not item[1].get("decided_at") else 1,
++                item[1].get("decided_at") or "",
++                item[0],
++            ),
++        )
++        existing.provenance = [record for _, record in records]
 +        recompute_scope(existing)
 +        session.delete(scope)
 +        return
@@ -4652,10 +4702,10 @@ index 6b86c9b..d85a1a7 100644
 +    assert repair_registry_snapshots(db, apply=False) == []
 diff --git a/tests/test_coverage_tasks.py b/tests/test_coverage_tasks.py
 new file mode 100644
-index 0000000..6ad7f0e
+index 0000000..3cdf2d5
 --- /dev/null
 +++ b/tests/test_coverage_tasks.py
-@@ -0,0 +1,762 @@
+@@ -0,0 +1,873 @@
 +from datetime import UTC, datetime, timedelta
 +
 +from sqlalchemy import select
@@ -5418,6 +5468,117 @@ index 0000000..6ad7f0e
 +        assert row.status == "needs_review"
 +    child = next(row for row in coverage_report(db, cfg, cohort=2027)["items"] if row["id"] == target_id)
 +    assert child["sources"] == []
++
++
++def test_legacy_scope_without_decided_at_conflicts_as_needs_review(tmp_path):
++    from soe_radar.identity import merge_alias_employers
++    from soe_radar.models import SourceEmployerScope
++
++    cfg = task_settings(tmp_path)
++    db = initialize(cfg)
++    canonical = "示例单位有限公司"
++    alias = "示例单位有限公司[示例单位别称]"
++    with db.session() as s:
++        target = Employer(name=canonical, org_type="soe", proof_url="https://example.org/about")
++        s.add_all([target, Employer(name=alias)])
++        s.flush()
++        target_id = target.id
++    base = dict(source_id="group", cohorts=[2027], batch_scope="2027秋招")
++    add_source_scope(
++        db,
++        **base,
++        employer_name=alias,
++        evidence_url="https://example.org/old",
++        quote="旧别名确认",
++        status="confirmed",
++    )
++    scope_id = add_source_scope(
++        db,
++        **base,
++        employer_name=canonical,
++        evidence_url="https://example.org/new",
++        quote="规范名确认",
++        status="confirmed",
++    )
++    add_source_scope(
++        db,
++        **base,
++        employer_name=canonical,
++        evidence_url="https://example.org/new",
++        quote="较晚撤回",
++        status="needs_review",
++    )
++    with db.session() as s:
++        for row in s.scalars(select(SourceEmployerScope)):
++            row.provenance = [
++                {key: value for key, value in record.items() if key != "decided_at"}
++                for record in row.provenance
++            ]
++            from soe_radar.coverage_tasks import recompute_scope
++
++            recompute_scope(row)
++    merge_alias_employers(db, apply=True)
++    with db.session() as s:
++        assert s.get(SourceEmployerScope, scope_id).status == "needs_review"
++    child = next(row for row in coverage_report(db, cfg, cohort=2027)["items"] if row["id"] == target_id)
++    assert child["sources"] == []
++
++
++def test_application_sentence_context_and_mixed_emails(tmp_path):
++    import asyncio
++    from types import SimpleNamespace
++    from unittest.mock import patch
++
++    cfg = task_settings(tmp_path)
++    db = initialize(cfg)
++    with db.session() as s:
++        employer = s.scalar(select(Employer))
++    cid = add_source_candidate(
++        db,
++        employer_id=employer.id,
++        employer_name=employer.name,
++        url="https://example.org/jobs",
++        discovery_method="official_site_nav",
++        identity_evidence="https://example.org/about",
++    )
++
++    class FakeFetcher:
++        text = ""
++
++        def __init__(self, cfg):
++            pass
++
++        async def page(self, url, source):
++            return SimpleNamespace(title="招聘", text="列表", via="http")
++
++        def candidates(self, page, source):
++            return [("https://example.org/notice", "2027校园招聘公告")]
++
++        async def document(self, url, source, title):
++            return SimpleNamespace(title=title, text=self.text, published_at=None, attachments=[])
++
++        async def close(self):
++            pass
++
++    FakeFetcher.text = (
++        "2027校园招聘岗位介绍。报名入口尚未公布；请访问 https://example.org/jobs 查看招聘岗位；"
++        "网申开放时间另行通知。"
++    )
++    with patch("soe_radar.coverage_tasks.Fetcher", FakeFetcher):
++        asyncio.run(_verify_candidate(db, cfg, SimpleNamespace(scope_id=cid)))
++    with db.session() as s:
++        assert s.get(SourceCandidate, cid).status == "readable"
++
++    FakeFetcher.text = (
++        "咨询邮箱：help@example.org，仅供咨询，不接收简历。请将简历发送至 hr@example.org 完成报名。"
++    )
++    with patch("soe_radar.coverage_tasks.Fetcher", FakeFetcher):
++        asyncio.run(_verify_candidate(db, cfg, SimpleNamespace(scope_id=cid)))
++    with db.session() as s:
++        row = s.get(SourceCandidate, cid)
++        assert row.status == "verified"
++        assert row.detail_result["verification"]["application"] == "found"
++        assert row.detail_result["application_target"] == "hr@example.org"
 diff --git a/tests/test_delivery.py b/tests/test_delivery.py
 new file mode 100644
 index 0000000..a933f76

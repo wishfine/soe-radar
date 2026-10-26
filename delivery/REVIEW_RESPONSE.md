@@ -125,6 +125,12 @@ uv run python delivery/review_scope_audit_repro.py
 - G2：报名判断改为目标局部语义；访问公司介绍页、咨询邮箱、请勿投递等否定句不通过；“请将简历发送至某邮箱”“通过某 URL 提交申请”等动作+目标绑定仍通过，并保存完整上下文与目标。
 - 复现：`review_scope_audit_followup_repro.py` 6 个探针全部通过；累计 40 个探针（14 历史 + 8 CQ + 6 F + 6 G + 6 跟进）全部通过；`uv run pytest -q` 177 passed。
 
+## 审核时间与报名局部语义升级（G1/G2 跟进）
+
+- G1：旧 provenance 缺少 `decided_at` 时，合并若同一届别同时存在 confirmed 与 needs_review，追加“旧记录缺少审核时间，冲突待复核”记录，不再按数组顺序恢复确认；无法确定时间的冲突保持 needs_review。
+- G2：报名判断改为按目标所在语句/分句识别动作、用途、否定和未来条件；访问岗位介绍页、咨询邮箱、否定投递句不通过；同文咨询邮箱 + 真实投递邮箱时选择真实目标 `hr@example.org` 并 verified；报名未公布时访问岗位页保持 readable。
+- 复现：`review_scope_legacy_repro.py` 3 个探针全部通过；累计 43 个探针（14 历史 + 8 CQ + 6 F + 6 G + 6 跟进 + 3 升级）全部通过；`uv run pytest -q` 179 passed。
+
 ## 报告口径更正
 
 - 本轮净新增校招机会改为 **28 条**（55→83），其中 2027 届 12 条；`activity_diff.json` 可复核 ID 差集。此前“33 条”是未排除山西结果公示前的旧口径。

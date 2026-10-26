@@ -1,0 +1,3 @@
+{"probe": "legacy_withdrawal_survives_alias_merge", "expected": "needs_review", "actual": "confirmed", "passes": false}
+{"probe": "unpublished_application", "expected": "readable", "actual": "verified", "passes": false}
+{"probe": "mixed_emails", "expected": "verified", "actual": "readable", "passes": false}

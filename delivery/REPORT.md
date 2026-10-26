@@ -205,7 +205,7 @@
 测试与构建：
 
 ```text
-uv run pytest -q            → 177 passed, 1 warning
+uv run pytest -q            → 179 passed, 1 warning
 ruff check src tests        → All checks passed
 ruff format --check src tests → 50 files already formatted
 uv build                    → sdist + wheel 成功
@@ -316,6 +316,12 @@ unresolved_binding_does_not_export_guessed_evidence: true
 - G1：范围审核记录增加 `decided_at`，合并时按审核时间排序；旧 confirmed 不会覆盖较晚的撤回，撤回后报告不返回共享入口；部分届别撤回保留其他 confirmed 届别。
 - G2：报名路径按目标局部语义判断；公司介绍访问、咨询邮箱、请勿投递/不接收简历等否定句不通过；真实投递邮箱/URL/网申系统仍通过，并保存完整上下文和目标。
 - 复现：`review_scope_audit_followup_repro.py` 6 个探针全部通过；累计 40 个探针全部通过。
+
+## 7.8 审核时间与报名局部语义升级
+
+- G1：旧记录缺少 `decided_at` 时，不再用数组顺序推断最新；同一届别 confirmed/needs_review 冲突追加待复核记录，保持 needs_review。
+- G2：报名证据按目标所在语句/分句判断；访问岗位介绍页、咨询邮箱、否定投递句不通过；同文多邮箱时按局部语义选择真实投递目标；报名未公布时保持 readable。
+- 复现：`review_scope_legacy_repro.py` 3 个探针通过；累计 43 个探针全部通过。
 
 ## 8. 尚未解决的主要缺口
 
