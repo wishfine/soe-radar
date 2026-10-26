@@ -8,7 +8,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urljoin, urlsplit
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from .config import Settings
 from .fetching import Fetcher
@@ -101,6 +101,8 @@ def plan_tasks(db, cfg: Settings, *, priorities=None, limit=None):
     existing = 0
     with db.session() as s:
         for spec in cfg.registries:
+            if limit is not None and created >= limit:
+                break
             priority = _priority_for_registry(spec)
             if priorities and priority not in priorities:
                 continue
@@ -136,6 +138,16 @@ def plan_tasks(db, cfg: Settings, *, priorities=None, limit=None):
                     existing += 1
 
         memberships = _memberships(s)
+        scoped_employers = set()
+        source_ids = {source.id for source in cfg.sources if source.enabled}
+        for scope in s.scalars(select(SourceEmployerScope).where(SourceEmployerScope.status == "confirmed")):
+            if scope.source_id not in source_ids:
+                continue
+            if scope.mode not in ("group_umbrella", "independent"):
+                continue
+            if scope.cohorts and int(_entry_period().split(":")[1]) not in scope.cohorts:
+                continue
+            scoped_employers.add(scope.employer_id)
         official_sites = {}
         for snapshot in s.scalars(select(RegistrySnapshot)):
             for entry in snapshot.entries:
@@ -150,6 +162,8 @@ def plan_tasks(db, cfg: Settings, *, priorities=None, limit=None):
         employers = list(s.scalars(select(Employer)))
         for employer in employers:
             if employer.name not in memberships and not employer.parent_id:
+                continue
+            if employer.id in scoped_employers:
                 continue
             names = {employer.name, *(employer.aliases or [])}
             if names & source_employers:
@@ -173,10 +187,20 @@ def plan_tasks(db, cfg: Settings, *, priorities=None, limit=None):
             else:
                 existing += 1
 
+        if limit is not None and created >= limit:
+            return {"created": created, "existing": existing}
         candidates = list(
-            s.scalars(select(SourceCandidate).where(SourceCandidate.status.in_(("lead", "identity_checked"))))
+            s.scalars(
+                select(SourceCandidate).where(
+                    SourceCandidate.status.in_(("lead", "identity_checked", "readable"))
+                )
+            )
         )
         for candidate in candidates:
+            if priorities and "P1" not in priorities:
+                continue
+            if limit is not None and created >= limit:
+                break
             if _add_task(
                 s,
                 scope_type="source_candidate",
@@ -275,15 +299,25 @@ def add_source_scope(
         return existing.id
 
 
-def _reset_stale(db):
-    cutoff = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+def recover_tasks(db, *, ids=None, action=None, note=""):
+    """Explicit recovery for interrupted running tasks; audited, not an age-only sweep."""
     with db.session() as s:
-        for task in s.scalars(
-            select(CoverageTask).where(CoverageTask.status == "running", CoverageTask.updated_at < cutoff)
-        ):
+        query = select(CoverageTask).where(CoverageTask.status == "running")
+        if ids:
+            query = query.where(CoverageTask.id.in_(ids))
+        if action:
+            query = query.where(CoverageTask.action == action)
+        rows = list(s.scalars(query))
+        for task in rows:
+            history = list((task.evidence or {}).get("recover_history", []))
+            history.append({"at": stamp(), "note": note or "人工恢复中断任务"})
+            task.evidence = {**(task.evidence or {}), "recover_history": history}
             task.status = "pending"
-            task.last_error = "上次执行中断，已恢复为待办"
+            task.owner = ""
+            task.due_at = stamp()
+            task.last_error = "人工恢复中断任务"
             task.updated_at = stamp()
+        return [{"id": row.id, "action": row.action, "scope_id": row.scope_id} for row in rows]
 
 
 async def _discover_registry(db, cfg, task):
@@ -433,21 +467,68 @@ async def _verify_candidate(db, cfg, task):
         links = fetcher.candidates(page, source)
         detail = {}
         attachments = {}
+        verification = {
+            "identity": "official_site_nav" if candidate.identity_evidence else "needs_review",
+            "list": "ok" if links else "missing",
+            "detail": "missing",
+            "application": "needs_review",
+            "attachments": "not_checked",
+        }
         if links:
             try:
                 doc = await fetcher.document(links[0][0], source, links[0][1])
+                text = doc.text or ""
                 detail = {
                     "title": doc.title,
-                    "text_len": len(doc.text),
+                    "text_len": len(text),
                     "published_at": str(doc.published_at or ""),
                 }
+                attachment_statuses = [item.get("status") for item in doc.attachments]
                 attachments = {
                     "count": len(doc.attachments),
-                    "statuses": [item.get("status") for item in doc.attachments],
+                    "statuses": attachment_statuses,
                 }
+                application_match = re.search(r".{0,40}(报名|投递|网申|申请).{0,80}", text)
+                if application_match:
+                    verification["application"] = "found"
+                    detail["application_quote"] = application_match.group().strip()
+                elif re.search(r"无需报名|不适用", text):
+                    verification["application"] = "not_applicable"
+                else:
+                    verification["application"] = "needs_review"
+                required_attachment_failed = bool(
+                    re.search(r"附件|报名材料|详见", text)
+                    and any(value in ("failed", "needs_ocr", "needs_review") for value in attachment_statuses)
+                )
+                verification["attachments"] = (
+                    "failed"
+                    if required_attachment_failed
+                    else "present"
+                    if attachment_statuses
+                    else "not_present"
+                )
+                verification["required_attachment_failed"] = required_attachment_failed
+                verification["detail"] = "ok"
             except Exception as exc:
                 detail = {"error": str(exc)[:300]}
-        status = "verified" if links and detail and not detail.get("error") else "needs_review"
+                verification["detail"] = "failed"
+        verified = (
+            verification["identity"] != "needs_review"
+            and verification["list"] == "ok"
+            and verification["detail"] == "ok"
+            and verification["application"] in ("found", "not_applicable")
+            and not verification.get("required_attachment_failed")
+        )
+        if verified:
+            status = "verified"
+        elif verification.get("required_attachment_failed"):
+            status = "needs_review"
+        elif links and verification["detail"] == "ok":
+            status = "readable"
+        else:
+            status = "needs_review"
+        verification["status"] = status
+        detail["verification"] = verification
         folder = cfg.data_dir / "candidates"
         folder.mkdir(parents=True, exist_ok=True)
         evidence = folder / (candidate.id + ".json")
@@ -481,10 +562,19 @@ async def _verify_candidate(db, cfg, task):
             row.updated_at = stamp()
         return {
             "status": "done",
-            "next_action": "候选已验证但仍未启用；需人工确认官方身份并接入配置"
-            if status == "verified"
-            else "列表或详情未通过，保留候选待人工核对",
-            "evidence": {"candidate_id": candidate.id, "list": len(links), "detail": detail},
+            "next_action": (
+                "候选完整验证通过但仍未启用；需人工确认官方身份并接入配置"
+                if status == "verified"
+                else "列表/详情可读但报名入口或必要附件未确认，保留 readable 待补证"
+                if status == "readable"
+                else "列表或详情未通过，保留候选待人工核对"
+            ),
+            "evidence": {
+                "candidate_id": candidate.id,
+                "list": len(links),
+                "detail": detail,
+                "verification": verification,
+            },
         }
     except Exception as exc:
         with db.session() as s:
@@ -495,6 +585,57 @@ async def _verify_candidate(db, cfg, task):
         return {"status": "blocked", "error": str(exc)[:300], "next_action": "访问受阻，保留候选与失败原因"}
     finally:
         await fetcher.close()
+
+
+def reverify_candidates(db, status="readable"):
+    """Queue an explicit recheck for candidates downgraded from legacy verified."""
+    with db.session() as s:
+        candidates = list(s.scalars(select(SourceCandidate).where(SourceCandidate.status == status)))
+        ids = [candidate.id for candidate in candidates]
+        for candidate in candidates:
+            candidate.status = "lead"
+            candidate.updated_at = stamp()
+        tasks = list(
+            s.scalars(
+                select(CoverageTask).where(
+                    CoverageTask.action == "verify_candidate",
+                    CoverageTask.scope_id.in_(ids) if ids else False,
+                )
+            )
+        )
+        for task in tasks:
+            task.status = "pending"
+            task.attempts = 0
+            task.owner = ""
+            task.due_at = stamp()
+            task.last_error = ""
+            task.updated_at = stamp()
+            history = list((task.evidence or {}).get("requeue_history", []))
+            history.append({"at": stamp(), "note": "readable 候选复查"})
+            task.evidence = {**(task.evidence or {}), "requeue_history": history}
+        return {"candidates": len(ids), "tasks": len(tasks)}
+
+
+def reclassify_legacy_candidates(db):
+    """Legacy verified rows lacked application/attachment stages; downgrade them for recheck."""
+    changed = 0
+    with db.session() as s:
+        for candidate in s.scalars(select(SourceCandidate).where(SourceCandidate.status == "verified")):
+            detail = dict(candidate.detail_result or {})
+            verification = detail.get("verification") or {}
+            if verification.get("status") == "verified":
+                continue
+            verification = {
+                **verification,
+                "status": "readable",
+                "legacy": "旧 verified 未记录报名入口和必要附件分项，降为 readable 待复查",
+            }
+            detail["verification"] = verification
+            candidate.detail_result = detail
+            candidate.status = "readable"
+            candidate.updated_at = stamp()
+            changed += 1
+    return changed
 
 
 async def execute_task(db, cfg, task):
@@ -525,20 +666,34 @@ async def run_tasks(db, cfg, *, batch=20, action=None, executor=None):
     owner = uid()
     if not db.acquire("coverage", owner, seconds=900):
         raise ValueError("已有覆盖任务持有租约")
-    _reset_stale(db)
     now = stamp()
     with db.session() as s:
-        query = select(CoverageTask).where(CoverageTask.status == "pending", CoverageTask.due_at <= now)
+        query = select(CoverageTask).where(
+            CoverageTask.due_at <= now,
+            (CoverageTask.status == "pending")
+            | ((CoverageTask.status == "blocked") & (CoverageTask.attempts < 5)),
+        )
         if action:
             query = query.where(CoverageTask.action == action)
         tasks = list(s.scalars(query.order_by(CoverageTask.priority, CoverageTask.created_at).limit(batch)))
     results = []
     try:
         for task in tasks:
+            # Renew/extend before each task; if another process owns the lease, stop.
+            if not db.acquire("coverage", owner, seconds=900):
+                break
             with db.session() as s:
-                row = s.get(CoverageTask, task.id)
-                row.status = "running"
-                row.updated_at = stamp()
+                claimed = s.execute(
+                    update(CoverageTask)
+                    .where(
+                        CoverageTask.id == task.id,
+                        CoverageTask.status.in_(("pending", "blocked")),
+                        CoverageTask.attempts < 5,
+                    )
+                    .values(status="running", owner=owner, updated_at=stamp())
+                )
+                if claimed.rowcount != 1:
+                    continue
             try:
                 result = await (executor or execute_task)(db, cfg, task)
                 status = result.get("status", "done")
@@ -546,26 +701,60 @@ async def run_tasks(db, cfg, *, batch=20, action=None, executor=None):
             except Exception as exc:
                 result = {"error": str(exc)[:300], "next_action": "异常中断，退避后重试"}
                 status, error = "pending", str(exc)[:300]
+            if not db.acquire("coverage", owner, seconds=900):
+                # Ownership was lost; do not overwrite another runner's result.
+                break
             with db.session() as s:
-                row = s.get(CoverageTask, task.id)
-                row.status = status
-                row.attempts += 1
-                row.last_error = error
-                row.last_run_at = stamp()
-                row.updated_at = stamp()
+                values = {
+                    "status": status,
+                    "attempts": CoverageTask.attempts + 1,
+                    "last_error": error,
+                    "last_run_at": stamp(),
+                    "updated_at": stamp(),
+                    "owner": "",
+                }
                 if result.get("evidence"):
-                    row.evidence = {**(row.evidence or {}), **result["evidence"]}
+                    values["evidence"] = {**(task.evidence or {}), **result["evidence"]}
                 if result.get("next_action"):
-                    row.next_action = result["next_action"]
+                    values["next_action"] = result["next_action"]
                 if status in ("pending", "blocked"):
-                    delay = min(2 ** max(row.attempts, 1), 24)
-                    row.due_at = (datetime.now(UTC) + timedelta(hours=delay)).isoformat()
-                    if row.attempts >= 5:
-                        row.status = "blocked"
+                    delay = min(2 ** max(task.attempts + 1, 1), 24)
+                    values["due_at"] = (datetime.now(UTC) + timedelta(hours=delay)).isoformat()
+                    if task.attempts + 1 >= 5:
+                        values["status"] = "blocked"
+                updated = s.execute(
+                    update(CoverageTask)
+                    .where(CoverageTask.id == task.id, CoverageTask.owner == owner)
+                    .values(**values)
+                )
+                if updated.rowcount != 1:
+                    continue
             results.append({"id": task.id, "action": task.action, "status": status, "error": error})
     finally:
         db.release("coverage", owner)
     return {"processed": len(results), "results": results}
+
+
+def requeue_tasks(db, *, ids=None, action=None, note=""):
+    """Explicit, audited requeue for blocked/manual tasks."""
+    with db.session() as s:
+        query = select(CoverageTask).where(CoverageTask.status.in_(("blocked", "needs_review")))
+        if ids:
+            query = query.where(CoverageTask.id.in_(ids))
+        if action:
+            query = query.where(CoverageTask.action == action)
+        rows = list(s.scalars(query))
+        for task in rows:
+            history = list((task.evidence or {}).get("requeue_history", []))
+            history.append({"at": stamp(), "note": note or "人工重排"})
+            task.evidence = {**(task.evidence or {}), "requeue_history": history}
+            task.status = "pending"
+            task.attempts = 0
+            task.owner = ""
+            task.due_at = stamp()
+            task.last_error = ""
+            task.updated_at = stamp()
+        return [{"id": row.id, "action": row.action, "scope_id": row.scope_id} for row in rows]
 
 
 def task_rows(db, *, status=None, limit=200):

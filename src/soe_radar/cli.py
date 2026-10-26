@@ -295,6 +295,68 @@ def coverage_run(
         db.engine.dispose()
 
 
+@app.command("coverage-requeue")
+def coverage_requeue(
+    ids: list[str] | None = typer.Option(None, "--id", help="指定任务 id，可重复"),
+    action: str | None = typer.Option(None, help="按动作重排，如 verify_candidate"),
+    note: str = typer.Option("", help="重排原因，写入任务证据"),
+):
+    """受控重排 blocked/needs_review 任务；记录审计并重置重试次数。"""
+    from .coverage_tasks import requeue_tasks
+
+    cfg = load_settings()
+    db = initialize(cfg)
+    try:
+        output({"requeued": requeue_tasks(db, ids=ids, action=action, note=note)})
+    finally:
+        db.engine.dispose()
+
+
+@app.command("coverage-recover")
+def coverage_recover(
+    ids: list[str] | None = typer.Option(None, "--id", help="指定任务 id，可重复"),
+    action: str | None = typer.Option(None, help="按动作恢复"),
+    note: str = typer.Option("", help="恢复原因，写入任务证据"),
+):
+    """人工恢复中断的 running 任务；不在 runner 中按固定时长自动清扫。"""
+    from .coverage_tasks import recover_tasks
+
+    cfg = load_settings()
+    db = initialize(cfg)
+    try:
+        output({"recovered": recover_tasks(db, ids=ids, action=action, note=note)})
+    finally:
+        db.engine.dispose()
+
+
+@app.command("source-candidate-reverify")
+def source_candidate_reverify(
+    status: str = typer.Option("readable", help="要复查的候选状态"),
+):
+    """把 readable 候选重新排队验证，保留旧结果等待覆盖。"""
+    from .coverage_tasks import reverify_candidates
+
+    cfg = load_settings()
+    db = initialize(cfg)
+    try:
+        output(reverify_candidates(db, status=status))
+    finally:
+        db.engine.dispose()
+
+
+@app.command("source-candidate-reclassify")
+def source_candidate_reclassify():
+    """把缺少报名/附件分项验证的旧 verified 候选降为 readable，等待复查。"""
+    from .coverage_tasks import reclassify_legacy_candidates
+
+    cfg = load_settings()
+    db = initialize(cfg)
+    try:
+        output({"changed": reclassify_legacy_candidates(db)})
+    finally:
+        db.engine.dispose()
+
+
 @app.command("coverage-tasks")
 def coverage_tasks(
     status: str | None = typer.Option(None, help="pending/running/done/blocked/needs_review"),

@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections import defaultdict
 
 from sqlalchemy import select
 
 from .coverage import split_alias
-from .models import Activity, Employer, Opportunity, Relationship
+from .models import (
+    Activity,
+    CoverageTask,
+    Employer,
+    Opportunity,
+    Relationship,
+    SourceCandidate,
+    SourceEmployerScope,
+)
 
 
 def identity_key(name: str) -> str:
@@ -84,6 +93,84 @@ def _safe_parent(session, target, candidate):
     return candidate
 
 
+def _key(*parts):
+    return hashlib.sha256("\0".join(str(part) for part in parts).encode()).hexdigest()
+
+
+def _remap_task(session, scope_type, old_id, new_id):
+    for task in list(
+        session.scalars(
+            select(CoverageTask).where(CoverageTask.scope_type == scope_type, CoverageTask.scope_id == old_id)
+        )
+    ):
+        task.scope_id = new_id
+        task.task_key = _key(scope_type, new_id, task.action, task.period_key)
+        conflict = session.scalar(
+            select(CoverageTask).where(CoverageTask.task_key == task.task_key, CoverageTask.id != task.id)
+        )
+        if conflict:
+            conflict.evidence = {
+                **(conflict.evidence or {}),
+                **(task.evidence or {}),
+                "merged_task_ids": list(
+                    dict.fromkeys(
+                        [
+                            *((conflict.evidence or {}).get("merged_task_ids", [])),
+                            task.id,
+                        ]
+                    )
+                ),
+            }
+            session.delete(task)
+
+
+def _merge_candidate(session, candidate, target):
+    existing = session.scalar(
+        select(SourceCandidate).where(
+            SourceCandidate.employer_id == target.id,
+            SourceCandidate.url == candidate.url,
+        )
+    )
+    if existing:
+        order = {"lead": 0, "identity_checked": 1, "readable": 2, "verified": 3, "blocked": 4, "rejected": 5}
+        if order.get(candidate.status, 0) > order.get(existing.status, 0):
+            existing.status = candidate.status
+        existing.list_result = existing.list_result or candidate.list_result
+        existing.detail_result = existing.detail_result or candidate.detail_result
+        existing.attachment_result = existing.attachment_result or candidate.attachment_result
+        existing.evidence_path = existing.evidence_path or candidate.evidence_path
+        _remap_task(session, "source_candidate", candidate.id, existing.id)
+        session.delete(candidate)
+        return existing.id
+    candidate.employer_id = target.id
+    candidate.candidate_key = _key(target.id, candidate.url)
+    _remap_task(session, "source_candidate", candidate.id, candidate.id)
+    return candidate.id
+
+
+def _merge_scope(session, scope, target):
+    existing = session.scalar(
+        select(SourceEmployerScope).where(
+            SourceEmployerScope.source_id == scope.source_id,
+            SourceEmployerScope.employer_id == target.id,
+            SourceEmployerScope.mode == scope.mode,
+            SourceEmployerScope.batch_scope == scope.batch_scope,
+        )
+    )
+    if existing:
+        existing.quote = "\n---\n".join(
+            value for value in (existing.quote, scope.quote) if value and value not in existing.quote
+        )
+        existing.cohorts = sorted(set((existing.cohorts or []) + (scope.cohorts or [])))
+        if scope.status == "confirmed":
+            existing.status = "confirmed"
+            existing.verified_at = existing.verified_at or scope.verified_at
+        existing.evidence_url = existing.evidence_url or scope.evidence_url
+        session.delete(scope)
+        return
+    scope.employer_id = target.id
+
+
 def merge_alias_employers(db, *, apply=False):
     groups = defaultdict(list)
     with db.session() as s:
@@ -121,6 +208,23 @@ def merge_alias_employers(db, *, apply=False):
                     activity.employer_id = target.id
                 for child in s.scalars(select(Employer).where(Employer.parent_id == duplicate.id)):
                     child.parent_id = target.id
+                for candidate in list(
+                    s.scalars(select(SourceCandidate).where(SourceCandidate.employer_id == duplicate.id))
+                ):
+                    _merge_candidate(s, candidate, target)
+                for scope in list(
+                    s.scalars(
+                        select(SourceEmployerScope).where(SourceEmployerScope.employer_id == duplicate.id)
+                    )
+                ):
+                    _merge_scope(s, scope, target)
+                for candidate in s.scalars(select(SourceCandidate)):
+                    ids = [
+                        target.id if value == duplicate.id else value
+                        for value in (candidate.scope_employer_ids or [])
+                    ]
+                    candidate.scope_employer_ids = list(dict.fromkeys(ids))
+                _remap_task(s, "employer", duplicate.id, target.id)
                 for relationship in list(
                     s.scalars(
                         select(Relationship).where(

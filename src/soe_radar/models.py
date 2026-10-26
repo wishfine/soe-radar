@@ -273,6 +273,7 @@ class CoverageTask(Base):
     next_action: Mapped[str] = mapped_column(String, default="")
     evidence: Mapped[dict] = mapped_column(JSON, default=dict)
     period_key: Mapped[str] = mapped_column(String, default="")
+    owner: Mapped[str] = mapped_column(String, default="")
     due_at: Mapped[str | None] = mapped_column(String)
     last_run_at: Mapped[str | None] = mapped_column(String)
     created_at: Mapped[str] = mapped_column(String, default=stamp)

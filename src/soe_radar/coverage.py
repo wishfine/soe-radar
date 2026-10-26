@@ -20,6 +20,7 @@ from .models import (
     RegistrySnapshot,
     RegistryState,
     SourceCandidate,
+    SourceEmployerScope,
     SourceState,
     stamp,
 )
@@ -853,6 +854,15 @@ def coverage_report(db, cfg, *, cohort=None):
         candidate_counts = {}
         for candidate in s.scalars(select(SourceCandidate)):
             candidate_counts[candidate.status] = candidate_counts.get(candidate.status, 0) + 1
+        source_by_id = {source.id: source for source in cfg.sources if source.enabled}
+        scopes_by_employer = {}
+        for scope in s.scalars(select(SourceEmployerScope).where(SourceEmployerScope.status == "confirmed")):
+            source = source_by_id.get(scope.source_id)
+            if not source or scope.mode not in ("group_umbrella", "independent"):
+                continue
+            if scope.cohorts and cohort not in scope.cohorts:
+                continue
+            scopes_by_employer.setdefault(scope.employer_id, []).append((scope, source))
         memberships = {}
         membership_evidence = {}
         registries = []
@@ -894,17 +904,20 @@ def coverage_report(db, cfg, *, cohort=None):
         for employer in employers:
             member_of = memberships.get(employer.name, [])
             # Exact entity / declared alias matching, never substring or parent inheritance.
-            entries = [
+            exact = [
                 x
                 for x in cfg.sources
                 if x.enabled
                 and x.employer
                 and (x.employer == employer.name or x.employer in employer.aliases)
             ]
+            scoped = scopes_by_employer.get(employer.id, [])
+            entries = list({source.id: source for source in [*exact, *(s for _, s in scoped)]}.values())
             own = [o for o in opportunities if o.employer_id == employer.id]
             # Orphan parser guesses from excluded documents cannot define the company universe.
             if not (member_of or entries or own or employer.org_type == "soe" and employer.proof_url):
                 continue
+            scope_by_source = {scope.source_id: scope for scope, _ in scoped}
             checks = [
                 {
                     "id": x.id,
@@ -913,6 +926,10 @@ def coverage_report(db, cfg, *, cohort=None):
                     "status": sources[x.id].status if x.id in sources else "unverified",
                     "last_success": sources[x.id].last_success if x.id in sources else None,
                     "error": sources[x.id].last_error if x.id in sources else "",
+                    "scope_mode": scope_by_source[x.id].mode if x.id in scope_by_source else "",
+                    "scope_cohorts": scope_by_source[x.id].cohorts if x.id in scope_by_source else [],
+                    "scope_batch": scope_by_source[x.id].batch_scope if x.id in scope_by_source else "",
+                    "scope_evidence": scope_by_source[x.id].evidence_url if x.id in scope_by_source else "",
                 }
                 for x in entries
             ]
