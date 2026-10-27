@@ -29,8 +29,8 @@
 - 新增 7 条 `source_employer_scopes`，只登记集团自身范围，不自动覆盖全部子公司。
 - 新增省级名录：上海 43 条（市国资委监管企业分类一览表，排除集体企业）；当前 13 个范围有原件、499 条。
 - 集团入口尝试：上汽集团官网人才招聘页跳转到 SPA 招聘门户，公开岗位列表接口返回 401 用户未登录；未绕过，保存 `evidence/recruitment/saic-*`，不计为新增来源。
-- 候选来源 241 条：8 verified、36 readable、24 needs_review、0 lead、173 blocked；旧 verified 已降为 readable 并进入复查，未把“列表/详情可读”当作完整验证。
-- 任务队列 717 条：28 名录、448 入口、241 候选验证；315 pending、186 blocked、92 needs_review、124 done。
+- 候选来源 466 条：16 verified、184 readable、40 needs_review、0 lead、226 blocked；旧 verified 已降为 readable 并进入复查，未把“列表/详情可读”当作完整验证。
+- 任务队列 985 条：28 名录、491 入口、466 候选验证；22 pending、239 blocked、321 needs_review、403 done。
 
 以下第 2–8 节保留 2026-10-23 基线口径；本节是本轮最新扩覆盖结果。
 

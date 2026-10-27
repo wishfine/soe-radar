@@ -66,8 +66,8 @@ unresolved_binding_does_not_export_guessed_evidence: true
 
 - 相比扩覆盖前备份：新增 26 条校招、18 条 2027 届。
 - 当前累计：24 个来源、125 条校招、66 条 2027 届、7 条已核验 2027 届。
-- 候选来源 241 条：8 verified、36 readable、24 needs_review、0 lead、173 blocked；旧 verified 已降为 readable 并进入复查，未把“列表/详情可读”当作完整验证。
-- 任务队列 717 条：28 名录、448 入口、241 候选验证；315 pending、186 blocked、92 needs_review、124 done。
+- 候选来源 466 条：16 verified、184 readable、40 needs_review、0 lead、226 blocked；旧 verified 已降为 readable 并进入复查，未把“列表/详情可读”当作完整验证。
+- 任务队列 985 条：28 名录、491 入口、466 候选验证；22 pending、239 blocked、321 needs_review、403 done。
 - 新增 7 条 `source_employer_scopes`，只登记集团自身范围，不自动覆盖子公司。
 - 入口缺口从 448 降到 484（新增上海 43 家后重新计算）。
 - 上汽集团招聘门户尝试：SPA + 公开岗位接口 401 登录限制，保存证据但不计为新增来源。
