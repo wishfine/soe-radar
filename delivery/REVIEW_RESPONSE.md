@@ -66,10 +66,11 @@ unresolved_binding_does_not_export_guessed_evidence: true
 
 - 相比扩覆盖前备份：新增 26 条校招、18 条 2027 届。
 - 当前累计：24 个来源、125 条校招、66 条 2027 届、7 条已核验 2027 届。
-- 候选来源 241 条：0 verified、8 readable、9 needs_review、51 lead、173 blocked；旧 verified 已降为 readable 并进入复查，未把“列表/详情可读”当作完整验证。
-- 任务队列 717 条：28 名录、448 入口、241 候选验证；366 pending、187 blocked、92 needs_review、72 done。
+- 候选来源 241 条：8 verified、36 readable、24 needs_review、0 lead、173 blocked；旧 verified 已降为 readable 并进入复查，未把“列表/详情可读”当作完整验证。
+- 任务队列 717 条：28 名录、448 入口、241 候选验证；315 pending、186 blocked、92 needs_review、124 done。
 - 新增 7 条 `source_employer_scopes`，只登记集团自身范围，不自动覆盖子公司。
-- 入口缺口从 448 降到 441。
+- 入口缺口从 448 降到 484（新增上海 43 家后重新计算）。
+- 上汽集团招聘门户尝试：SPA + 公开岗位接口 401 登录限制，保存证据但不计为新增来源。
 
 ## 覆盖任务管理复审（CQ1–CQ6）
 
@@ -140,7 +141,7 @@ uv run python delivery/review_scope_audit_repro.py
 ## 报告口径更正
 
 - 本轮净新增校招机会改为 **28 条**（55→83），其中 2027 届 12 条；`activity_diff.json` 可复核 ID 差集。此前“33 条”是未排除山西结果公示前的旧口径。
-- 当前名录快照 456 条 = 本轮有原件的 12 个范围 429 条 + 历史金融 26 条 + 补充主体 1 条。
+- 当前名录快照 499 条 = 本轮有原件的 13 个范围 472 条 + 历史金融 26 条 + 补充主体 1 条。
 - 国务院国资委页面：HTTPS 证书已于 2023-11-10 过期且缺中间证书；改用同域 HTTP 官方页面，并与 `curl -k` HTTPS 抓取逐条比对 100 个企业名称一致。该快照标记 `tls_verified=false`，不自动提升企业性质核验；未修改系统证书、代理、TUN 或分流。
 - 关系：confirmed 2 条；南网数字 1 条 `needs_review`，不再计入 confirmed。
 
@@ -168,4 +169,4 @@ ruff format --check src tests    → 45 files already formatted
 uv build                          → sdist + wheel 成功
 ```
 
-测试通过不代表全国覆盖完成；22 个省级地区、兵团、地市、区县、所属单位和 448 家无招聘入口企业仍在 `gaps.csv` 中。
+测试通过不代表全国覆盖完成；21 个省级地区、兵团、地市、区县、所属单位和 484 家无招聘入口企业仍在 `gaps.csv` 中。

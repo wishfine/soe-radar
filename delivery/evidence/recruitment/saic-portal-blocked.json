@@ -1,0 +1,13 @@
+{
+  "source_id": "saic-attempt",
+  "title": "上汽集团招聘入口核验（受阻）",
+  "employer": "上海汽车集团股份有限公司",
+  "official_url": "https://www.saicmotor.com/chinese/rlzy/index.html",
+  "recruitment_url": "https://saic-recruit.saicmotor.com/recruit/pc/#/collegeRecruit",
+  "checked_at": "2026-10-27T08:20:00+08:00",
+  "status": "blocked",
+  "reason": "官网人才招聘页 302 到 SPA 招聘门户；公开岗位列表接口返回 401 用户未登录，未绕过登录。",
+  "api_checked": "https://saic-recruit.saicmotor.com/recruit/api/recruit/position/get/list",
+  "api_response": "{\"msg\":\"用户未登录\",\"code\":401}",
+  "note": "仅记录入口核验失败，不计为新增招聘来源或覆盖。"
+}
