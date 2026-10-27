@@ -353,11 +353,17 @@ registries:
     authority_url: https://gzw.hlj.gov.cn/
     authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
   - id: local-09
-    name: 上海地方国企（名录待接入）
+    name: 上海地方国企
     category: local
     region: 上海
+    url: https://www.gzw.sh.gov.cn/shgzw_xtdw/index.html
+    domains: [gzw.sh.gov.cn]
+    scope: 上海市国资委监管企业分类一览表；排除集体企业，不含区县和所属单位
+    adapter: text
+    entry_selector: ".xtdw"
+    min_entries: 40
     authority_url: https://www.gzw.sh.gov.cn/
-    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
+    authority_proof_url: https://www.gzw.sh.gov.cn/shgzw_xtdw/index.html
   - id: local-10
     name: 江苏地方国企（名录待接入）
     category: local

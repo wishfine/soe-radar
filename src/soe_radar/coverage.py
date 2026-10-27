@@ -110,16 +110,17 @@ def parse_registry(html, spec, *, enforce_min=True):
         for node in soup.select(spec.entry_selector):
             if spec.adapter == "text":
                 # A directory can mix linked enterprises and plain-text enterprises in one node.
-                anchors = [
-                    anchor
-                    for anchor in node.select("a[href]")
-                    if _is_company(anchor.get_text(" ", strip=True).strip())
-                ]
-                for anchor in anchors:
-                    name = anchor.get_text(" ", strip=True).strip()
-                    name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", name).lstrip("（(【[")
+                anchors = []
+                for anchor in node.select("a[href]"):
+                    raw = anchor.get_text(" ", strip=True).strip()
+                    match = COMPANY_RE.search(raw)
+                    if not match:
+                        continue
+                    name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", match.group()).lstrip("（(【[")
                     if not _is_company(name):
                         continue
+                    anchors.append((anchor, name))
+                for anchor, name in anchors:
                     official_url, profile_url = _link_target(anchor, spec.url, name)
                     entries[name] = _entry(
                         name,

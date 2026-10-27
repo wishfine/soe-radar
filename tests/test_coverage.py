@@ -732,3 +732,26 @@ def test_repair_unresolved_entry_clears_verified_binding_and_is_idempotent(tmp_p
         assert "page_url" not in entry and "page_sha256" not in entry and "page_path" not in entry
         assert entry["page_binding_candidates"][0]["path"] == "registries/missing.html"
     assert repair_registry_snapshots(db, apply=False) == []
+
+
+def test_text_directory_strips_star_and_alias_suffix_from_anchor_text(tmp_path):
+    from soe_radar.config import RegistryConfig
+    from soe_radar.coverage import parse_registry
+
+    spec = RegistryConfig(
+        id="shanghai-style",
+        name="上海样式",
+        category="local",
+        url="https://example.gov.cn/list",
+        domains=["example.gov.cn"],
+        adapter="text",
+        entry_selector=".xtdw",
+        min_entries=1,
+    )
+    html = (
+        '<div class="xtdw">示例一集团有限公司 \n ★ 【示例一集团】'
+        '<a href="/profile">示例二集团股份有限公司 【示例二集团】</a></div>'
+    )
+    rows = {row["name"]: row for row in parse_registry(html, spec)}
+    assert set(rows) == {"示例一集团有限公司", "示例二集团股份有限公司"}
+    assert rows["示例二集团股份有限公司"]["profile_url"].endswith("/profile")
