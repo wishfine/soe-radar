@@ -1,0 +1,85 @@
+diff --git a/src/soe_radar/coverage.py b/src/soe_radar/coverage.py
+index 2860e11..3995fd8 100644
+--- a/src/soe_radar/coverage.py
++++ b/src/soe_radar/coverage.py
+@@ -110,16 +110,17 @@ def parse_registry(html, spec, *, enforce_min=True):
+         for node in soup.select(spec.entry_selector):
+             if spec.adapter == "text":
+                 # A directory can mix linked enterprises and plain-text enterprises in one node.
+-                anchors = [
+-                    anchor
+-                    for anchor in node.select("a[href]")
+-                    if _is_company(anchor.get_text(" ", strip=True).strip())
+-                ]
+-                for anchor in anchors:
+-                    name = anchor.get_text(" ", strip=True).strip()
+-                    name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", name).lstrip("（(【[")
++                anchors = []
++                for anchor in node.select("a[href]"):
++                    raw = anchor.get_text(" ", strip=True).strip()
++                    match = COMPANY_RE.search(raw)
++                    if not match:
++                        continue
++                    name = re.sub(r"^\s*\d{1,5}\s*[.、．)]\s*", "", match.group()).lstrip("（(【[")
+                     if not _is_company(name):
+                         continue
++                    anchors.append((anchor, name))
++                for anchor, name in anchors:
+                     official_url, profile_url = _link_target(anchor, spec.url, name)
+                     entries[name] = _entry(
+                         name,
+diff --git a/src/soe_radar/defaults.yaml b/src/soe_radar/defaults.yaml
+index 51fcc93..9e30c25 100644
+--- a/src/soe_radar/defaults.yaml
++++ b/src/soe_radar/defaults.yaml
+@@ -353,11 +353,17 @@ registries:
+     authority_url: https://gzw.hlj.gov.cn/
+     authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
+   - id: local-09
+-    name: 上海地方国企（名录待接入）
++    name: 上海地方国企
+     category: local
+     region: 上海
++    url: https://www.gzw.sh.gov.cn/shgzw_xtdw/index.html
++    domains: [gzw.sh.gov.cn]
++    scope: 上海市国资委监管企业分类一览表；排除集体企业，不含区县和所属单位
++    adapter: text
++    entry_selector: ".xtdw"
++    min_entries: 40
+     authority_url: https://www.gzw.sh.gov.cn/
+-    authority_proof_url: https://gzw.fujian.gov.cn/wzdh/ssqy/
++    authority_proof_url: https://www.gzw.sh.gov.cn/shgzw_xtdw/index.html
+   - id: local-10
+     name: 江苏地方国企（名录待接入）
+     category: local
+diff --git a/tests/test_coverage.py b/tests/test_coverage.py
+index d85a1a7..1a8a2d7 100644
+--- a/tests/test_coverage.py
++++ b/tests/test_coverage.py
+@@ -732,3 +732,26 @@ def test_repair_unresolved_entry_clears_verified_binding_and_is_idempotent(tmp_p
+         assert "page_url" not in entry and "page_sha256" not in entry and "page_path" not in entry
+         assert entry["page_binding_candidates"][0]["path"] == "registries/missing.html"
+     assert repair_registry_snapshots(db, apply=False) == []
++
++
++def test_text_directory_strips_star_and_alias_suffix_from_anchor_text(tmp_path):
++    from soe_radar.config import RegistryConfig
++    from soe_radar.coverage import parse_registry
++
++    spec = RegistryConfig(
++        id="shanghai-style",
++        name="上海样式",
++        category="local",
++        url="https://example.gov.cn/list",
++        domains=["example.gov.cn"],
++        adapter="text",
++        entry_selector=".xtdw",
++        min_entries=1,
++    )
++    html = (
++        '<div class="xtdw">示例一集团有限公司 \n ★ 【示例一集团】'
++        '<a href="/profile">示例二集团股份有限公司 【示例二集团】</a></div>'
++    )
++    rows = {row["name"]: row for row in parse_registry(html, spec)}
++    assert set(rows) == {"示例一集团有限公司", "示例二集团股份有限公司"}
++    assert rows["示例二集团股份有限公司"]["profile_url"].endswith("/profile")
